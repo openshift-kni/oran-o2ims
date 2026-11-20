@@ -142,11 +142,13 @@ register the webhook so it can be validated on a live cluster.
 **Deliverables.**
 
 - `internal/webhooks/onboardingrequest_webhook.go`: server-list validation,
-  spec immutability, append-only server list, single-address-family enforcement,
-  and the **deletion guard** that rejects deletion while a _published_ BMH exists.
-  (The mid-BMC-mutation part of the deletion guard, and the request finalizer's
-  quiesce/drain of in-flight mutations, arrive with the pinning/credential phases
-  that introduce BMC-mutation states — v1 has none. See
+  spec immutability (entries not modified in place), single-address-family
+  enforcement, and the **de-onboard guard** — `spec.servers` is the desired set, so a
+  server **removal** (or a request delete) is rejected while that server is
+  mid-onboarding or its BMH is **allocated/provisioned** (deprovision the host first).
+  (The BMC-restore part of de-onboarding, and the request finalizer's quiesce/drain of
+  in-flight mutations, arrive with the pinning/credential phases that introduce
+  BMC-mutation states — v1 de-onboard only deletes the BMH once it is not in use. See
   [Deletion semantics](server-onboarding-service.md#deletion-semantics).)
   Per-field validation for the Metal3-dependent fields lands in their phases.
 - `config/webhook/`: `service.yaml` (service-ca annotated), `manifests.yaml`
@@ -155,9 +157,11 @@ register the webhook so it can be validated on a live cluster.
   `kustomization.yaml`; **register the webhook in `main.go`** so it runs when
   deployed.
 
-**Tests.** envtest webhook cases: immutability rejection, append-only enforcement,
-single-family enforcement, deletion allowed with no published BMH / rejected with
-one. **On-cluster:** deploy and confirm the webhook admits/rejects against a live
+**Tests.** envtest webhook cases: immutability rejection, add/remove of
+`spec.servers` entries, single-family enforcement, de-onboard guard (removal/request
+delete rejected while a server is mid-onboarding or its BMH is allocated/provisioned,
+allowed otherwise). **On-cluster:** deploy and confirm the webhook admits/rejects
+against a live
 API server.
 
 **Exit criteria.** Webhook validated in envtest and exercised on a live cluster;
@@ -209,9 +213,10 @@ controller so the phase is live-cluster testable.
   data a `Location` needs) and create `OCloudSite`/`ResourcePool` when absent (with
   default descriptions, validating an existing site's parent Location), per
   [Resource provisioning on reconciliation](server-onboarding-service.md#1-api-design-crds);
-  create one `OnboardingServer` per `spec.servers` entry, create per-server
-  ExternalSecrets against the configured `ClusterSecretStore`, and maintain the
-  request status (validation + aggregated onboarding status and counts) per
+  reconcile `spec.servers` as the **desired set** — create an `OnboardingServer` (and
+  per-server ExternalSecrets) for each added entry, and **delete the OnboardingServer
+  (de-onboard)** for each removed entry — and maintain the request status (validation +
+  aggregated onboarding status and counts) per
   [§1](server-onboarding-service.md#1-api-design-crds).
 - `DeletionTimestamp` handling immediately after fetch (per AGENTS.md reconciler
   rule); `//+kubebuilder:rbac` markers for the resources it touches; **register the
@@ -312,9 +317,10 @@ address), via the Metal3 **BMC networking config API**
   [§5](server-onboarding-implementation.md#5-metal3-bmc-configuration). No direct
   BMC/Redfish client; BMO performs the Redfish work.
 - `onboardingserver_controller.go`: insert the `PinningBmcAddress` state before
-  `Publishing`; add the mid-BMC-mutation deletion guard and the finalizer's
-  drain/async-rollback handling for this state; record progress in
-  `status.mutationProgress`.
+  `Publishing`; add the mid-BMC-mutation de-onboard guard and the finalizer's
+  drain + async-rollback handling for this state, including **restoring the NIC pin to
+  DHCP on de-onboard** (part of returning the BMC to pool defaults so a de-onboarded
+  host is cleanly re-onboardable); record progress in `status.mutationProgress`.
 
 **Tests.** unit: `bmcconfig.go` pin against a fake client (desired-state set +
 BMH-condition mapping). envtest: `PinningBmcAddress` transition and rollback.
@@ -336,8 +342,11 @@ via the Metal3 **BMC credentials provisioning API**
   propagated by BMO to the BMC and the BMH Secret, and interpret the conditions.
 - `onboardingserver_controller.go`: insert the `UpdatingCredentials` state (after
   pinning, before `Publishing`); extend the mid-mutation guard and
-  `mutationProgress`/rollback to cover it; the BMH-creation webhook guard pins
-  `bmc.address` host to the declared `bmcAddress` and restricts `credentialsName`.
+  `mutationProgress`/rollback to cover it, including **restoring the pool-default
+  credentials on de-onboard** (so a de-onboarded host accepts the defaults again on
+  re-onboarding — the controller's job, not the operator's); the BMH-creation webhook
+  guard pins `bmc.address` host to the declared `bmcAddress` and restricts
+  `credentialsName`.
 
 **Tests.** unit: credential-provisioning helper against a fake client. envtest:
 `UpdatingCredentials` transition and the point-of-no-return semantics; a

@@ -346,33 +346,33 @@ Cleanup only applies to **per-server resources**. The shared ExternalSecret CRs 
 |---|---|---|---|
 | `CreatingExternalSecrets` | Shared ExternalSecret CRs + synced K8s Secrets | **Request-level** (shared) | No per-server cleanup. Deleted only via OnboardingRequest finalizer. |
 | `CreatingExternalSecrets` | Per-server ExternalSecret CR + synced K8s Secret (local mode) | **Server-level** | Delete the ExternalSecret and synced Secret, **unless a published BMH references it** (`spec.bmc.credentialsName`) — published BMHs are live, so their credential Secret is retained. |
-| `Inspecting` | BMH created (default creds, inventory-hold marker) | **Server-level** | **Delete the BMH if it is still held** (inventory-hold marker present, never published). This is safe — a held BMH has never appeared in O2 IMS inventory. A **published** BMH (marker removed, at/after `Publishing`) is live infrastructure and is **never** deleted (see [Deletion semantics](server-onboarding-service.md#deletion-semantics)). |
+| `Inspecting` | BMH created (default creds, inventory-hold marker) | **Server-level** | **Held BMH:** deleted on any cleanup (never appeared in inventory). **Published BMH:** **retained** while the server stays in `spec.servers`; on **de-onboard** it is restored to pool defaults and deleted too — but only once it is **not allocated/provisioned** (see [Deletion semantics](server-onboarding-service.md#deletion-semantics)). |
 | `ApplyingHardwareProfile` | HostFirmwareSettings/Components + HostUpdatePolicy CRs (matched to BMH) | **Server-level** | **Deleted with the held BMH.** Flashed firmware/BIOS is **not** rolled back (a baseline) — re-onboarding re-applies it. Only when `hardwareProfileName` set. |
 | `PinningBmcAddress` (both modes) | BMC NIC pinned from DHCP to static (same IP) | **Server-level** | **Reversible (best-effort)** — BMO reverts the NIC to DHCP (Metal3 networking API). Address unchanged (BMH no-op). Runs before any credential change, so rollback creds are defaults. |
 | `UpdatingCredentials` (local) | BMC credentials changed to per-server desired | **Server-level** | **Not reversible** — the default credentials are no longer valid. `status.stateMessage` notes this. |
 | `ConfiguringLdap` (ldap) | LDAP configured on BMC | **Server-level** | **Reversible while the local account is enabled** — request disabling LDAP / re-enabling local auth via the Metal3 LDAP API; BMO applies it (best-effort). The local account is not disabled here, so rollback creds remain. |
-| `Publishing` | Inventory-hold marker removed; BMH published | **Server-level** | **No cleanup** — once published the BMH is live infrastructure and is never deleted or re-held; the deletion guard blocks request teardown while it exists (see [Deletion semantics](server-onboarding-service.md#deletion-semantics)). |
+| `Publishing` | Inventory-hold marker removed; BMH published | **Server-level** | **No cleanup while the server stays desired** — the published BMH is retained (never re-held). On **de-onboard** (entry removed / request deleted) it is restored to pool defaults and deleted, gated on the host not being allocated/provisioned (see [Deletion semantics](server-onboarding-service.md#deletion-semantics)). |
 | `DisablingLocalAccounts` (ldap) | Local account disabled (`disableLocalAccounts: true`) | **Server-level** | **Not reversible** — with the local account gone there is no non-LDAP path to re-enable it. Applied after `Publishing`, before `Completed`; best-effort. |
 
-**Per-server cleanup order:** BMC rollback — `UpdatingCredentials` (no-op, not
-reversible) or `DisablingLocalAccounts` (also not reversible — the local account is
-gone; this state is only reached after `Publishing`, so the BMH is retained anyway)
-or `ConfiguringLdap` (reversible — disable LDAP, re-enable local auth;
-safe because local accounts are still enabled at this point) → revert a pinned BMC
-NIC to DHCP (`PinningBmcAddress` onward, best-effort) → delete the held BMH
-(`Inspecting` onward, only while the BMH still carries the inventory-hold marker;
-retained when a published BMH exists) → `CreatingExternalSecrets` (delete per-server
-ExternalSecret, only if no
-published BMH depends on it)
+**Per-server cleanup order:** **restore the BMC to pool defaults** — revert the NIC
+pin to DHCP, restore the default credentials, and (LDAP) disable LDAP / re-enable
+local auth — then **delete the BMH** and the per-server ExternalSecret. On a
+**de-onboard** this runs for a published host too (after confirming it is not
+allocated/provisioned); when the server is still desired, the published BMH and its
+credentials are **retained** instead (see the finalizer classification below). The
+earlier-stated "credentials are irreversible" no longer holds: because the Metal3
+credentials API can set the BMC back to the pool defaults, de-onboarding restores
+them rather than leaving the operator to reset the BMC.
 
 **Cleanup tracking:** Rollback selection keys off **`status.mutationProgress`**, not
 `status.state`. On a failure `status.state` collapses to `Failed` and no longer says
 which BMC mutation was in flight, so it cannot drive rollback. Instead the controller
 records each operation in `status.mutationProgress` as it goes — `Requested` before
 declaring the desired state on the BMH / companion CR, then `Applied` / `Failed` when
-BMO reports the outcome — and the finalizer rolls back exactly the operations that
-reached `Requested` or `Applied` (an op left at `Requested` is the partially-applied
-case that still needs reverting), marking each `RolledBack`. `status.cleanupStatus`
+BMO reports the outcome — and the finalizer rolls back every reversible operation that
+reached `Requested`, `Applied`, **or** `Failed` (a `Failed` op may have partially
+changed the BMC, and a `Requested`-but-not-`Applied` op may also have taken effect),
+marking each `RolledBack`. `status.cleanupStatus`
 (`pending`, `completed`, `partial`) is the separate **outcome** of that run: a
 best-effort step that fails is logged in `status.stateMessage` and recorded `partial`,
 but does not block other cleanup.
@@ -390,60 +390,62 @@ without the finalizer, an `oc delete onboardingserver` would drop the CR and
 orphan its per-server resources. On finalization the controller:
 
 1. Sets `status.cleanupStatus: pending`.
-2. **Waits for any still-in-flight BMC operation to settle (or safely cancels it)
-   before rolling anything back.** The child finalizer must do this **itself** — it
-   cannot assume the OnboardingRequest finalizer's drain ran, because under
-   *foreground* garbage collection Kubernetes can begin child finalization before the
-   parent finishes draining (and a lone `oc delete onboardingserver` has no parent
-   drain at all). Concretely: if `status.mutationProgress` shows an operation at
-   `Requested` with no terminal `Applied`/`Failed` outcome yet, the finalizer blocks
-   and requeues until BMO reports that operation settled (or cancels it) — issuing a
-   rollback against an operation BMO is still applying would race. Only then does it
-   proceed to rollback below.
-3. **If the BMH is published, skip all BMC rollback and deletion** (marker removed,
-   at/after `Publishing`): a published BMH is live infrastructure the finalizer must
-   never mutate or delete. In particular it does **not** revert the BMC NIC to DHCP —
-   doing so would drop the static-address guarantee and could change the address the
-   live host answers on — and it **retains** the BMH and the per-server
-   ExternalSecret/Secret (referenced by `spec.bmc.credentialsName` for the life of
-   the host). Those shared/per-server credentials are removed later by the
-   OnboardingRequest finalizer, which runs only after all published BMHs are gone (see
-   [Deletion semantics](server-onboarding-service.md#deletion-semantics)).
+2. **Classifies the deletion** — `spec.servers` is the desired set, so the finalizer's
+   action depends on whether the server is still wanted:
+   - **Retain** — the server's entry is **still in `spec.servers`**, the
+     OnboardingRequest is **not** being deleted, **and** the BMH is **published**: a
+     transient CR delete of a still-desired, live host (idempotent re-onboarding).
+     Leave the BMH and per-server Secret untouched and skip to step 6; the controller
+     recreates the OnboardingServer and short-circuits to `Completed` (see
+     [Deleting a Completed server](server-onboarding-service.md#deleting-a-completed-server-idempotent-re-onboarding)).
+   - **De-onboard** — the entry has been **removed** from `spec.servers`, or the
+     OnboardingRequest is being deleted: tear the server down, **including a published
+     BMH**. First **refuse while in use**: if the BMH is allocated or provisioned (a
+     referencing AllocatedNode / NodeAllocationRequest, or past `available`), record
+     that cleanup is blocked and requeue until the host is deprovisioned back to the
+     pool through the normal provisioning workflow. Also exclude it from allocation
+     selection so it cannot be grabbed mid-teardown.
+   - **Retry-cleanup** — the entry is still desired but the BMH is **held** (failed
+     before `Publishing`): clean it up so the recreate starts fresh.
 
-   Otherwise (a **held** BMH, inventory-hold marker present — onboarding did not reach
-   `Publishing`), run the per-server cleanup in the order above, selecting what to roll
-   back from **`status.mutationProgress`** (not `status.state`, which may be `Failed`).
-   A reversible op is rolled back whenever it reached **`Requested`, `Applied`, or
-   `Failed`** — crucially including `Failed`, since a BMO operation can fail *after*
-   partially changing the BMC, and a `Requested`-but-not-`Applied` op may also have
-   taken effect. (Only ops still at `Requested` with a documented no-side-effect
-   guarantee may be skipped.):
-   - **Reversible BMC rollback** for any `ConfigureLdap` op at `Requested`/`Applied`/`Failed`
-     (request disable-LDAP / re-enable-local-auth via the Metal3 LDAP API; a no-op for
-     `ProvisionCredentials`, which is irreversible, and for pre-mutation states), and
-     the **NIC-to-DHCP revert** for a `PinNetwork` op at `Requested`/`Applied`/`Failed` (via the
-     Metal3 networking API, best-effort; the address is unchanged so the BMH is
-     unaffected). Each reverted op is marked `RolledBack` in `status.mutationProgress`.
-   - **Wait for BMO to report the requested rollback settled** before deleting the
-     held BMH. Because these operations are applied asynchronously by BMO, deleting
-     the BMH immediately could drop a rollback BMO has not yet performed. The
-     finalizer watches the BMH conditions for the rollback to complete, or, on a
-     bounded timeout, records `status.cleanupStatus: partial` (with the attempted
-     operation in `status.stateMessage`) and proceeds. Deleting the BMH's parent
-     Metal3 config state (if any) along with the BMH is acceptable only once the
-     rollback has settled or the timeout has elapsed.
-   - **Delete the held BMH** (it has never appeared in O2 IMS inventory), then delete
-     the per-server ExternalSecret and its ESO-synced Secret.
-4. Sets `status.cleanupStatus: completed` if every step succeeded, or `partial`
+   The **de-onboard** and **retry-cleanup** cases both run steps 3–4; **retain** skips
+   them.
+3. **Waits for any still-in-flight BMC operation to settle (or safely cancels it)
+   before rolling anything back.** The child finalizer does this **itself** — it
+   cannot assume the OnboardingRequest finalizer's drain ran, because under
+   _foreground_ garbage collection Kubernetes can begin child finalization before the
+   parent finishes draining (and a lone `oc delete onboardingserver` has no parent
+   drain at all). If `status.mutationProgress` shows an operation at `Requested` with
+   no terminal `Applied`/`Failed` outcome yet, the finalizer blocks and requeues until
+   BMO reports it settled — a rollback issued against an in-flight op would race.
+4. **Restores the BMC, then deletes the BMH.** Selects what to revert from
+   **`status.mutationProgress`** (not `status.state`, which may be `Failed`): a
+   reversible op is reverted whenever it reached **`Requested`, `Applied`, or
+   `Failed`** — a `Failed` op can fail _after_ partially changing the BMC, and a
+   `Requested`-but-not-`Applied` op may also have taken effect.
+   - **Revert the BMC to the pool-default state** via the Metal3 APIs — NIC pin →
+     DHCP (`PinNetwork`), restore the pool-default credentials (`ProvisionCredentials`),
+     and disable LDAP / re-enable local auth (`ConfigureLdap` / `DisableLocalAccounts`).
+     This is best-effort and runs **even for a published host being de-onboarded**, so
+     the server returns to a cleanly re-onboardable state **with no manual BMC work** —
+     restoring the BMC is the controller's job, never the operator's. Each reverted op
+     is marked `RolledBack` in `status.mutationProgress`.
+   - **Wait for BMO to report each revert settled** before deleting the BMH (BMO
+     applies them asynchronously); on a bounded timeout record
+     `status.cleanupStatus: partial` (with the reason) and proceed.
+   - **Delete the BMH**, then the per-server ExternalSecret and its ESO-synced Secret.
+5. Sets `status.cleanupStatus: completed` if every step succeeded, or `partial`
    if a best-effort step failed. `partial` is logged and recorded in
    `status.stateMessage` but **does not block** finalizer removal — cleanup never
-   wedges a delete.
-5. Removes the finalizer, allowing Kubernetes to delete the object.
+   wedges a delete. (An **in-use** BMH in the de-onboard case is the one exception: it
+   blocks in step 2 until the host is deprovisioned — it does not force-delete a live
+   host.)
+6. Removes the finalizer, allowing Kubernetes to delete the object.
 
 The credential ExternalSecrets (per-server **and** shared) carry **no owner reference**
 that would trigger garbage collection on OnboardingServer or OnboardingRequest
 deletion, and their lifecycle is managed **explicitly by the controller**.
-Owner-reference GC cannot express the ordering this design needs: under *foreground*
+Owner-reference GC cannot express the ordering this design needs: under _foreground_
 cascading deletion the collector deletes an owned dependent **concurrently** with the
 still-running child finalizers (the parent's own custom finalizer does not hold back
 GC of its other dependents), which would remove the credentials BMO needs for
@@ -472,15 +474,13 @@ per-server finalizer therefore runs its **per-server** rollback/cleanup **while 
 shared credential Secrets still exist**, and only **afterwards** does the request
 finalizer remove the **shared** ExternalSecrets and then its own finalizer (see
 [Deletion semantics](server-onboarding-service.md#deletion-semantics)). After the
-drain, every surviving server is one of: **pre-mutation** (nothing to roll back);
-**past `Publishing`** (a published BMH — the finalizer never rolls back or deletes
-it, and the published-BMH gate blocks whole-request teardown until it is
-decommissioned); or **held in a terminal-failure state**. That last case is the one
-that still performs a real rollback — e.g. a `ConfiguringLdap` that failed before
-`Publishing`: disable LDAP / re-enable local auth on the held BMC. It is reversible
-precisely because local accounts are still enabled pre-`Publishing`, and it runs
-before the shared credentials are removed, so BMO still has the credentials it needs
-to apply it.
+drain, request teardown de-onboards **every** server (`spec.servers` is being
+emptied), so each per-server finalizer runs the full **restore-BMC-then-delete-BMH**
+path — including for published hosts — while the shared credentials still exist (BMO
+needs them to restore the BMC to pool defaults). The one thing that can still block
+teardown is a BMH that is **allocated or provisioned**: the finalizer refuses to tear
+down a running host and waits (surfacing why) until it is deprovisioned back to the
+pool through the normal provisioning workflow.
 
 **Terminal mismatch states (`VendorMismatch`, `HwMismatch`):** Both are reached
 from `Inventorying` — after inspection but before any Redfish mutation. The BMH
@@ -882,8 +882,8 @@ No database is required — all state is stored in CRDs, and the REST API server
 
 ### Webhook serving and configuration
 
-The validating webhook (creation validation, update immutability/append-only,
-and the delete-time deletion guard — see [Validation](server-onboarding-service.md#1-api-design-crds) and
+The validating webhook (creation validation, update immutability / `spec.servers`
+add-remove, and the delete-time de-onboard guard — see [Validation](server-onboarding-service.md#1-api-design-crds) and
 [Deletion semantics](server-onboarding-service.md#deletion-semantics)) is served by the same onboarding Pod,
 using the controller-runtime webhook server. Serving it requires three pieces of
 infrastructure that the deployment manifests must include:
@@ -907,13 +907,14 @@ the Pod is down. The operational cost — OnboardingRequest writes are blocked
 during a webhook outage — is acceptable because onboarding writes are infrequent,
 administrator-driven actions, not a hot path.
 
-Critically, `Fail` is **not** what makes deletion safe: the OnboardingRequest
-**finalizer** is the authoritative deletion guard. It re-checks for surviving
-`onboarded-*` BMHs and blocks teardown regardless of whether the delete webhook
-ran (closing the TOCTOU gap described in [Deletion semantics](server-onboarding-service.md#deletion-semantics)).
-The delete webhook is a fast-feedback UX layer that rejects the `oc delete`
-immediately with a clear message; even if it were bypassed or unavailable, the
-finalizer still prevents a request from being removed while its BMHs exist. This
+Critically, `Fail` is **not** what makes de-onboarding safe: the OnboardingServer
+and OnboardingRequest **finalizers** are the authoritative guards. They re-check that
+a BMH is **not allocated or provisioned** before restoring and deleting it — and
+block (waiting for deprovision) if it is — regardless of whether the delete webhook
+ran (closing the TOCTOU gap in [Deletion semantics](server-onboarding-service.md#deletion-semantics)).
+The delete webhook is a fast-feedback UX layer that rejects an unsafe `oc delete` /
+server removal immediately with a clear message; even if it were bypassed or
+unavailable, the finalizers still never tear down a host that is in use. This
 defense-in-depth split means webhook downtime degrades feedback, not data safety.
 
 `sideEffects: None` (validation only, no external mutations) and a tight
@@ -1614,7 +1615,11 @@ Add to `spec.servers`:
       desiredCredentialsVaultSecret: bmc/pool1-server-105
 ```
 
-The webhook validates that existing entries are unchanged and new entries are valid. The OnboardingRequest controller creates two new OnboardingServer CRs on the next reconciliation, and the state machine processes them independently. `totalServerCount` updates to 5.
+The webhook validates that existing entries are not modified in place and new entries
+are valid (`spec.servers` is the desired set — adding onboards, removing de-onboards).
+The OnboardingRequest controller creates two new OnboardingServer CRs on the next
+reconciliation, and the state machine processes them independently. `totalServerCount`
+updates to 5.
 
 ### Step 6: Handle failures
 
@@ -1638,9 +1643,11 @@ machine (see [Retrying a failed server](server-onboarding-service.md#retrying-a-
 oc delete onboardingserver 10-10-10-103 -n pool-toronto-east-1
 ```
 
-There is no need to delete the OnboardingRequest — and once other servers have
-published BMHs (completed onboarding, inventory-hold marker removed), the deletion
-webhook would reject that anyway. Held BMHs still mid-onboarding do not block it.
+There is no need to delete the OnboardingRequest to retry one server. (Deleting the
+request would de-onboard **all** servers — restoring and deleting their BMHs — which
+is not what a single-server retry wants; and it would block on any BMH still
+allocated/provisioned until that host is deprovisioned. See
+[Deletion semantics](server-onboarding-service.md#deletion-semantics).)
 
 On `VendorMismatch` the held BMH is deleted, so the BMH column is empty. Note that
 the vendor check runs during `Inventorying` on the **inspection result**, but
@@ -1745,11 +1752,13 @@ each state in [section 2](server-onboarding-service.md#2-server-onboarding-state
    `VendorMismatch`/`HwMismatch`); declaring the BMC net/creds/LDAP config and
    advancing on simulated BMH conditions (the controller issues no Redfish — BMC
    interactions are mocked at the BMH-condition boundary); marker removal at
-   `Publishing`; webhook validation (immutability, server list
-   append-only, deletion guard rejecting only when a **published** BMH exists);
-   OnboardingServer finalizer cleanup (held BMH deleted, per-server
-   ExternalSecret/Secret removed, published BMH and its credentials **retained**,
-   `status.cleanupStatus` set; retry-by-delete recreates the server as `Pending`);
+   `Publishing`; webhook validation (immutability, `spec.servers` add/remove,
+   de-onboard guard rejecting a server **removal or request delete** while the server
+   is mid-onboarding or its BMH is allocated/provisioned); OnboardingServer finalizer
+   **de-onboarding** (entry removed / request deleted → restore BMC to pool defaults +
+   delete BMH, incl. a published host; **blocked** while the BMH is allocated/
+   provisioned; **retained** when the entry is still desired), `status.cleanupStatus`
+   set; retry-by-delete recreates the server as `Pending`;
    **security guardrails** — a BMH whose rendered `bmc.address` host is not the
    declared `bmcAddress`, references a non-pool Secret, or flips cert verification
    against pool policy is rejected; and a **compromised-service-account test** (the

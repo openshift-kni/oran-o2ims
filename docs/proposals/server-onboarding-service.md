@@ -469,18 +469,26 @@ The OnboardingRequestSpec is partially immutable after creation:
   `bmcSubnet`/`bmcGateway` was supplied (see
   [Hardware attribute matching / pinning](#1-api-design-crds)): the operator sets or
   corrects `bmcSubnet`/`bmcGateway` on the existing OnboardingRequest and retries the
-  failed server (delete its OnboardingServer; it is recreated as `Pending`) —
-  **without** recreating the whole request, which the deletion guard would block once
-  any server has published. The webhook re-validates the CIDR/gateway/family rules on
-  update.
-- **Append-only `servers` list**: New server entries may be appended to the `servers` list. Existing entries cannot be modified or removed. This allows adding servers to an onboarding request incrementally without requiring a new CR.
+  failed server — **without** recreating the whole request. The webhook re-validates
+  the CIDR/gateway/family rules on update.
+- **`servers` is the desired set (add and remove)**: `spec.servers` declares the
+  servers the pool should contain. Adding an entry onboards a server; **removing** an
+  entry **de-onboards** it (the controller restores the BMC and deletes the BMH and
+  its resources — see [Deletion semantics](#deletion-semantics)). An entry's identity
+  is its `bmcAddress`, which cannot be changed in place — correcting a mistyped
+  address is a remove-then-add. A removal is rejected by the webhook while that
+  server's OnboardingServer is mid-onboarding or its BMH is allocated/provisioned
+  (deprovision the host first).
 
 The webhook validates on update:
 
 1. All fields other than `servers`, `bmcSubnet`, and `bmcGateway` are unchanged.
-2. The existing server entries (by index) are identical to the previous spec.
-3. Any new entries at the end of the list pass the same validation rules as at creation time.
-4. New `bmcAddress` values do not duplicate existing entries.
+2. Existing server entries are not **modified in place** (an entry's `bmcAddress` is
+   its identity); entries may be **added or removed**, but a removal is allowed only
+   when the server is safe to de-onboard (OnboardingServer in a terminal state and
+   its BMH not allocated/provisioned — see [Deletion semantics](#deletion-semantics)).
+3. Added entries pass the same validation rules as at creation time.
+4. `bmcAddress` values remain unique within the list.
 5. Updated `bmcSubnet`/`bmcGateway` still satisfy the CIDR/gateway/family rules, and every server's `bmcAddress` still falls within `bmcSubnet`.
 
 **OnboardingServer CR naming:** The CR name is a **deterministic UUID** (UUIDv5)
@@ -867,106 +875,85 @@ type MutationOp struct {
 
 ### Deletion semantics
 
-Deletion is gated on **live infrastructure**, not on OnboardingServer state: an
-OnboardingRequest may be deleted once the resources it produced (clusters and
-BMHs) have been torn down through the normal provisioning lifecycle. Gating on
-OnboardingServer state instead would make a request permanently undeletable —
-every `Completed` server sits "past Inventorying" forever, with no path to
-removal even after its BMH is gone.
+`spec.servers` is the **full desired set** of servers in the pool, and the
+controller reconciles actual resources to match it. Membership is managed through
+the OnboardingRequest (via `oc` or the REST `PATCH`), **never** by deleting BMHs or
+OnboardingServer CRs out of band:
 
-Because there is exactly one OnboardingRequest per resource pool and its BMHs
-live in the namespace named after `resourcePoolName`, the request's BMHs are
-identified by that namespace — no extra labelling is required. "Live
-infrastructure" here means a **published** BMH: an `onboarded-*` BMH whose
-inventory-hold marker has been removed (onboarding reached `Publishing`), which is
-therefore visible to the O2 IMS inventory and may be allocated to clusters. A
-still-**held** BMH (inventory-hold marker present — a server mid-onboarding) is
-not live infrastructure; it is cleaned up automatically by the owning
-OnboardingServer's finalizer during the GC cascade below. Deletion is enforced by
-a **validating webhook** on delete:
+- **Add** an entry → the controller creates an OnboardingServer and onboards it.
+- **Remove** an entry → the controller **de-onboards** that server: it restores the
+  BMC, deletes the BMH and the per-server onboarding-managed resources, and removes
+  the OnboardingServer once cleanup completes.
+- **Delete the OnboardingRequest** → the controller de-onboards **every** server in
+  the pool, then finishes request deletion after all cleanups complete.
 
-- **Reject if any published BMH from this request still exists** — i.e. any
-  `onboarded-*` BMH in the resource pool namespace (carrying the
-  `resources.clcm.openshift.io/resourcePoolName: <poolName>` label the service
-  already applies) that no longer has the inventory-hold marker. Published BMH CRs
-  are live infrastructure and are **never** deleted by the onboarding service.
-  (Held BMHs, by contrast, are deleted by the service — see
-  [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior) — so they do not block
-  request deletion.) Decommissioning a published host is a deliberate,
-  operator-driven sequence:
-  1. **Deprovision any clusters** using those hosts. Deprovisioning does **not**
-     delete the BMH — the hardware manager deallocates it (`deallocateBMH` in
-     `baremetalhost_manager.go`) and returns it to the resource pool as
-     `available`. The BMH CR persists.
-  2. **Delete the BMH CRs** explicitly (`oc delete bmh -n <resourcePoolName>
-     onboarded-<bmcAddress>`) once they are `available` and no longer referenced by
-     any AllocatedNode / NodeAllocationRequest.
-  3. **Delete the per-host BMC credential Secrets** referenced by
-     `spec.bmc.credentialsName`. Note the credential
-     Secrets are ESO-synced from ExternalSecret CRs, so ESO re-creates them until
-     the owning ExternalSecret is removed; in practice these are cleaned up by
-     the OnboardingRequest finalizer (below), which deletes the ExternalSecret
-     first. Deleting them manually only sticks after the ExternalSecrets are gone.
+This replaces an earlier "published BMHs must be manually deleted before the request
+can be deleted" model. Request-driven de-onboarding makes the lifecycle one
+desired-state reconciliation and removes the ambiguous case where an admin deletes a
+BMH while its `spec.servers` entry remains (the controller would otherwise just
+re-onboard it on the next reconcile).
 
-  Only after all published `onboarded-*` BMHs are gone does the webhook permit
-  deleting the OnboardingRequest.
-- **Reject if any OnboardingServer is mid-BMC-mutation** — state
-  `PinningBmcAddress`, `UpdatingCredentials`, or `ConfiguringLdap`. In these states
-  a Metal3 BMC-config operation is in flight (BMO applying it over Redfish);
-  deleting then could strand a BMC in a half-configured network or credential
-  state. The operator
-  waits for these to reach `Publishing`/`Completed` (then decommission the BMH
-  per above) or a terminal failure state. (The `DisablingLocalAccounts` state also mutates the
-  BMC, but it runs against an **already-published** BMH, so the published-BMH
-  check above already blocks deletion while a server is hardening — no separate
-  state check is needed for it.)
+**De-onboarding is the exact inverse of onboarding, and the controller — not the
+administrator — restores the BMC.** It runs as the OnboardingServer finalizer
+whenever a server is removed from `spec.servers`, the request is deleted, or the
+OnboardingServer is deleted directly:
 
-When both checks pass, deletion proceeds via a **finalizer** on the
-OnboardingRequest. The webhook checks above are **advisory** — a server can enter a
-BMC mutation or `Publishing` in the TOCTOU window between admission and teardown — so
-the finalizer, not the webhook, is the authority that drains in-flight work before
-destroying any shared state:
+1. **Never tear down a host that is in use.** If the BMH is **allocated or
+   provisioned** (referenced by an AllocatedNode / NodeAllocationRequest, or past the
+   `available` state), cleanup is **blocked**: the finalizer records that it is
+   waiting and requeues until the host is returned to the pool through the normal
+   provisioning workflow (deprovision the cluster using it; the hardware manager
+   deallocates it back to `available`).
+2. **Prevent new allocation.** Once de-onboarding starts, the host is excluded from
+   allocation selection (the same inventory-hold-style guard used during onboarding),
+   so a ProvisioningRequest cannot grab it mid-teardown.
+3. **Wait for any in-flight BMC operation to settle, then restore the BMC**
+   best-effort via the Metal3 APIs — revert the NIC pin to DHCP, restore the
+   pool-default credentials, and (LDAP mode) disable LDAP / re-enable local auth — so
+   the server returns to a cleanly **re-onboardable** state with **no manual BMC
+   work**. Restoring the BMC is the controller's responsibility; failures are
+   recorded (`cleanupStatus: partial`, with the reason) but do not wedge teardown.
+4. **Delete the BMH** and the per-server ExternalSecret/Secret, then remove the
+   finalizer. The OnboardingServer stays visible (reporting de-onboarding progress in
+   `status`) until its cleanup completes.
 
-1. **Quiesce the children.** Once the OnboardingRequest has a `DeletionTimestamp`,
-   the OnboardingServer controller treats that as a stop signal and starts **no new**
-   BMC mutation and **no** `Publishing` transition. (Per-server reconcilers still run
-   their own deletion/cleanup.)
-2. **Drain in-flight mutations.** Block and requeue while any OnboardingServer is
-   mid-BMC-mutation (`PinningBmcAddress` / `UpdatingCredentials` / `ConfiguringLdap`)
-   or mid-`Publishing` — wait for BMO to settle each to a stable state (success or
-   terminal failure). This closes the window the webhook's mid-mutation and
-   published-BMH checks cannot.
-3. **Re-check published BMHs.** If any **published** `onboarded-*` BMH remains in the
-   resource pool namespace (e.g. one that reached `Publishing` during the drain),
-   block and requeue — published hosts are live infrastructure and must be
-   decommissioned first. (Held BMHs do not block; they are removed by the per-server
-   finalizers in step 4.)
-4. **Delete the children explicitly and wait for their finalizers.** The request
-   finalizer does **not** rely on owner-reference garbage collection to clean up the
-   children: under the default _background_ GC policy the owner can be removed before
-   the child finalizers complete, and the controller must not depend on the parent
-   finalizer to keep the children (and shared credentials) available. Instead it
-   **explicitly deletes each OnboardingServer** and **blocks/requeues until their
-   finalizers have run** — so each per-server rollback/cleanup completes **while the
-   shared credential Secrets still exist** (BMO needs them to roll a held BMC back; see
-   [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)).
-   This makes correctness independent of the foreground/background GC policy. (The
-   service account therefore needs `delete` on `onboardingservers` — see the RBAC
-   table.)
-5. **Delete the shared credentials — and any remaining per-server credentials —
-   last.** Only after every child OnboardingServer is gone does the request finalizer
-   delete the shared ExternalSecret CRs (default credentials, LDAP bind/user) and
-   their ESO-synced K8s Secrets. It **also** deletes any per-server ExternalSecrets /
-   synced Secrets still present — in particular those for a **published host that was
-   decommissioned** before the request was torn down: that host's OnboardingServer
-   finalizer intentionally _retained_ its credentials while the BMH was live, and
-   because the credential ExternalSecrets carry **no owner reference**
-   ([they are managed explicitly](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)),
-   nothing else would ever remove them. The request finalizer therefore sweeps every
-   onboarding-owned ExternalSecret/Secret in the pool namespace, not just the shared
-   ones, so no credential is left synced indefinitely. The request finalizer is
-   removed last, so the OnboardingRequest object outlives its children regardless of
-   GC ordering.
+**Admission guards (validating webhook) — advisory, with the finalizer as the real
+authority:**
+
+- **Reject removing a `spec.servers` entry, or deleting the request, while the
+  server's OnboardingServer is in a non-terminal onboarding state** (mid-BMC-mutation,
+  etc.) — let the in-flight operation settle first.
+- **Reject removal/deletion while the associated BMH is allocated or provisioned** —
+  the host is live; deprovision it first. The finalizer re-checks and waits, so a host
+  that becomes allocated in the TOCTOU window is still never torn down.
+
+Direct `oc delete onboardingserver` is likewise a **protected** operation: the
+webhook rejects it while the BMH is in use, and the finalizer repeats the check as a
+fallback (for an allocated BMH it reports cleanup is blocked and waits for
+deallocation before proceeding). Note that deleting an OnboardingServer whose entry
+is **still in `spec.servers`** is transient — the controller recreates and re-onboards
+it to match desired state, so direct deletion is only useful as a manual retry (see
+[Retrying a failed server](#retrying-a-failed-server)).
+
+**Request deletion** then proceeds via a **finalizer** on the OnboardingRequest. The
+webhook checks are advisory (a server can become allocated or enter a mutation in the
+TOCTOU window), so the finalizer is the authority:
+
+1. **Quiesce the children.** The `DeletionTimestamp` is a stop signal — the
+   OnboardingServer controller starts no new onboarding work.
+2. **Explicitly delete each OnboardingServer and wait for its finalizer** (the
+   de-onboarding above) to complete — restoring and deleting each BMH while the
+   shared credential Secrets still exist. It does **not** rely on owner-reference GC
+   (under the default _background_ policy the owner can be removed before children
+   finalize), so the service account needs `delete` on `onboardingservers`. If any
+   server's BMH is still **in use**, this step **blocks and surfaces why** until the
+   operator deprovisions those hosts — the one remaining case that needs operator
+   action, and only because a running cluster depends on the host.
+3. **Delete the shared credentials, and sweep any remaining per-server
+   ExternalSecrets/Secrets** in the pool namespace (the credential ExternalSecrets
+   carry [no owner reference](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior),
+   so nothing else removes them), then remove the request finalizer **last**, so the
+   OnboardingRequest outlives its children regardless of GC ordering.
 
 **Inventory CRs are intentionally not deleted.** The `OCloudSite` and
 `ResourcePool` CRs the controller created (in the O-Cloud manager namespace) are
@@ -1017,7 +1004,7 @@ Kubernetes API group is likewise `onboarding.openshift.io`, not an `o2ims` group
 | `GET .../v1/onboardingRequests` | `List` OnboardingRequest | List all onboarding requests |
 | `POST .../v1/onboardingRequests` | `Create` OnboardingRequest | Create a request (drives onboarding of its servers) |
 | `GET .../v1/onboardingRequests/{onboardingRequestId}` | `Get` OnboardingRequest | Single request: summary counts plus the compact per-server list (name, state, message per server) |
-| `PATCH .../v1/onboardingRequests/{onboardingRequestId}` | `Patch` OnboardingRequest | Amend a request — the only mutations the spec allows: **append** entries to `spec.servers` and **correct** `bmcSubnet`/`bmcGateway` (the failed-pin recovery path). The webhook enforces immutability/append-only/field rules, so illegal edits are rejected regardless of interface (see [Spec mutability](#1-api-design-crds)) |
+| `PATCH .../v1/onboardingRequests/{onboardingRequestId}` | `Patch` OnboardingRequest | Amend a request — the mutations the spec allows: **add or remove** entries in `spec.servers` (adding onboards, removing de-onboards) and **correct** `bmcSubnet`/`bmcGateway` (the failed-pin recovery path). The webhook enforces the immutability/de-onboard/field rules, so illegal edits are rejected regardless of interface (see [Spec mutability](#1-api-design-crds)) |
 | `DELETE .../v1/onboardingRequests/{onboardingRequestId}` | `Delete` OnboardingRequest | Tear down a request (subject to the finalizer / deletion guard — see [Deletion semantics](#deletion-semantics)) |
 
 `onboardingRequestId` is the OnboardingRequest CR name (cluster-scoped, so no
@@ -1049,9 +1036,9 @@ OnboardingRequest CR an operator could `oc apply`/`oc patch`/`oc delete`. The
 validating webhook ([Controllers](server-onboarding-implementation.md#7-controllers))
 and the finalizer are enforced by the API server on the CR write itself, so they
 apply identically no matter which interface originates the change — the REST facade
-gains the append-only/immutability/deletion-safety checks for free. `PATCH` closes
+gains the de-onboard/immutability/deletion-safety checks for free. `PATCH` closes
 the asymmetry where a request could be created and deleted via REST but only
-_amended_ via `oc`; the mutable operations (append servers, correct
+_amended_ via `oc`; the mutable operations (add/remove servers, correct
 `bmcSubnet`/`bmcGateway`) are now first-class in both interfaces.
 
 **Implementation.** Following the DB-free facade shape of `internal/service/artifacts`
@@ -1219,62 +1206,46 @@ that apply across states.
 
 ### Retrying a failed server
 
-A server that lands in a terminal failure state (`AuthFailed`,
-`VendorMismatch`, `HwMismatch`, or `Failed`) is retried **per server**, without
-touching the rest of the pool:
+A server that lands in a terminal failure state (`AuthFailed`, `VendorMismatch`,
+`HwMismatch`, or `Failed`) is retried **per server**, without touching the rest of
+the pool, in either of two equivalent ways:
 
-- **Delete the individual OnboardingServer CR** (`oc delete onboardingserver
-  -n <resourcePoolName> <name>`). Because OnboardingServer CRs are (re)created
-  from `spec.servers` by the OnboardingRequest controller, the controller
-  recreates the deleted one as `Pending` on its next reconciliation and the state
-  machine runs again from the start. The server's spec entry remains in the
-  OnboardingRequest, so nothing needs to be re-declared.
+- **Request-driven (recommended).** Remove the server's entry from `spec.servers`,
+  wait for its de-onboarding to finish (the controller restores the BMC and deletes
+  the held BMH — see [Deletion semantics](#deletion-semantics)), fix the external
+  cause, then add the entry back for a fresh attempt.
+- **Direct delete (manual shortcut).** `oc delete onboardingserver -n <pool>
+  <name>`. The entry is still in `spec.servers`, so the controller recreates it as
+  `Pending` and re-onboards. The finalizer first cleans up the **held** BMH (never
+  published for a failed server) and restores the BMC, so the recreate starts clean.
 
-This is the **only** supported retry path. Deleting and recreating the whole
-OnboardingRequest is **not** a viable retry mechanism once any server has
-succeeded: the deletion webhook rejects removal while any `onboarded-*` BMH
-exists (see [Deletion semantics](#deletion-semantics)), so a request with a mix
-of completed and failed servers cannot be deleted just to retry the failures.
-
-Whether a recreate succeeds depends on **when** the failure occurred:
-
-- **Pre-mutation terminal states** (`AuthFailed`, `VendorMismatch`, `HwMismatch`,
-  and any `Failed` reached during `Pending` / `CreatingExternalSecrets` /
-  `Inspecting` / `Inventorying` / `ApplyingHardwareProfile` / `PinningBmcAddress`):
-  the BMC still holds the
-  pool's default
-  credentials, so a
-  recreated OnboardingServer re-registers cleanly. Deleting the OnboardingServer
-  first deletes any held BMH via the finalizer (it was never published) and
-  best-effort requests a revert of a pinned BMC NIC to DHCP (via the Metal3
-  networking config API), so the recreated run starts from a clean slate. (A `Failed` in `ApplyingHardwareProfile`
-  may have flashed firmware or applied BIOS settings already; that hardware state
-  is not rolled back, but the recreated run simply re-applies the same profile, so
-  the baseline converges regardless.) (Even if the revert is skipped, the
-  BMC keeps the same address, so re-registration still succeeds.) Recreate
-  **after** fixing the root
-  cause — reset/replace the BMC-default credentials or vault entry (`AuthFailed`),
-  rack the correct hardware model (`VendorMismatch` / `HwMismatch`), or restore
-  vault/ESO connectivity (`Failed`).
-- **Post-mutation `Failed`** (reached during `UpdatingCredentials`,
-  `ConfiguringLdap`, or `Publishing`, after a BMC credential/LDAP change may have
-  applied): a recreated OnboardingServer restarts from `Inspecting`, which creates
-  the BMH with the **pool default** credentials, but the BMC may already have the
-  per-server desired (or LDAP) credentials, so BMO would fail to register at
-  `Inspecting` (→ `AuthFailed`). The operator must first restore the BMC to accept
-  the pool default credentials (e.g. an out-of-band BMC reset) **before** deleting
-  the OnboardingServer to retry.
+The important change from a naive retry: **de-onboarding restores the BMC** (reverts
+the NIC pin, restores pool-default credentials, disables LDAP). So there is **no
+longer a "post-mutation failure needs a manual BMC reset" case** — even a `Failed`
+reached during/after `UpdatingCredentials` or `ConfiguringLdap` is recovered by the
+controller returning the BMC to the pool-default state before the retry, rather than
+the operator doing an out-of-band reset. Fix the root cause first — bad
+default-credentials/vault entry (`AuthFailed`), wrong hardware model
+(`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity (`Failed`). (A `Failed`
+in `ApplyingHardwareProfile` may have already flashed firmware/BIOS; that hardware
+state is a baseline the recreated run simply re-applies, so it converges regardless.)
 
 ### Deleting a Completed server (idempotent re-onboarding)
 
-Retry-by-delete is intended for **failed** servers, but nothing stops an operator
-from deleting a `Completed` OnboardingServer — and the OnboardingRequest
-controller will recreate it as `Pending` all the same, because its entry is still
-in `spec.servers`. Naively re-running the state machine would be harmful: the BMC
-now holds the per-server desired (or LDAP) credentials, so a fresh `Inspecting`
-run — which creates the BMH with the pool default credentials — would fail to
-register (→ `AuthFailed`) even though a perfectly healthy, published BMH already
-exists.
+Deleting a `Completed` OnboardingServer whose entry is **still in `spec.servers`** is
+different from **removing** that entry: the former is a transient CR delete (the
+server is still desired, so the controller recreates it as `Pending`); the latter is
+a **de-onboard** (the server is no longer desired, so the controller restores the BMC
+and deletes the BMH — see [Deletion semantics](#deletion-semantics)). The finalizer
+tells them apart: if the entry is still desired and the request is not being deleted,
+it **retains** the published BMH and credentials (no de-onboard); only an entry
+removal or request deletion triggers teardown.
+
+For the transient-delete case, naively re-running the state machine would be
+harmful: the BMC now holds the per-server desired (or LDAP) credentials, so a fresh
+`Inspecting` run — which creates the BMH with the pool default credentials — would
+fail to register (→ `AuthFailed`) even though a perfectly healthy, published BMH
+already exists.
 
 To make this safe, a reconcile of a CR **with no in-progress state of its own**
 (`status.state` empty or `Pending` — a freshly created or recreated
@@ -1314,12 +1285,13 @@ recreated server can restore the reported state:
 The in-progress-state gate still prevents the check from firing on a server that is
 **the same CR** still progressing (e.g. mid-`DisablingLocalAccounts`); the BMH
 marker additionally covers the delete-and-recreate case the gate cannot see.
-Combined with the finalizer **retaining**
-the per-server credentials whenever a published BMH exists (see
-[Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)), deleting a `Completed`
-OnboardingServer is therefore a safe no-op: the CR is cleaned up without touching
-the live BMH or its credentials, recreated as `Pending`, and immediately
-reconciled back to `Completed` against the existing BMH.
+Combined with the finalizer **retaining** the BMH and per-server credentials when the
+entry is still desired (no de-onboard — see
+[Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior)),
+deleting a `Completed` OnboardingServer whose entry remains is therefore a safe
+no-op: the CR is cleaned up without touching the live BMH or its credentials,
+recreated as `Pending`, and immediately reconciled back to `Completed` against the
+existing BMH.
 
 A BMH that is found **still holding** the inventory-hold marker is treated
 differently — it is a mid-onboarding host, not a finished one. The controller
@@ -1473,7 +1445,8 @@ Hub Cluster                               Remote Site
   | (core) | `namespaces` | get, list, create | Resource pool namespace |
   | `external-secrets.io` | `externalsecrets` | get, list, watch, create, delete | Create shared/per-server ExternalSecrets; delete on finalizer/cleanup |
   | (core) | `secrets` | delete | **Namespace-scoped** (`Role` + per-pool `RoleBinding`). Deletes per-server and shared ESO-synced Secrets (both in the pool namespace) by name. Controller never reads Secret data (readiness from `ExternalSecret` `.status`; BMO reads it) — so no `get`/`list`/`watch` |
-  | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH (`inspectionMode: fast`, hold marker) in `Inspecting`; `patch` to request BMC config and clear the hold annotation (`Publishing`); watch conditions; delete a **held** BMH (code-constrained) |
+  | `metal3.io` | `baremetalhosts` | get, list, watch, create, update, patch, delete | Create the BMH (`inspectionMode: fast`, hold marker); `patch` for BMC config and to clear the hold annotation (`Publishing`); watch conditions; delete a BMH on de-onboard when **not in use** (code-constrained) |
+  | `metal3.io` | `allocatednodes`; `clcm.openshift.io` `nodeallocationrequests` | get, list, watch | Check whether a BMH is **allocated/provisioned** (in use by a cluster) before de-onboarding — the finalizer refuses to tear down an in-use host |
   | `metal3.io` | BMC networking / credentials / LDAP config resources (exact kinds TBD — may be BareMetalHost sub-resources or companion CRs) | get, list, watch, create, update, patch, delete | Declare and track the DHCP→static pin + DNS, credential provisioning, and LDAP config that BMO applies over Redfish. The precise resources/verbs depend on the final Metal3 API — see [Dependency on forthcoming Metal3 APIs](#dependency-on-forthcoming-metal3-apis) |
   | `metal3.io` | `hardwaredata` | get, list, watch | Read the `HardwareData` CR produced by fast out-of-band (Redfish) inspection for vendor/hardware matching (`Inventorying`) |
   | `clcm.openshift.io` | `hardwareprofiles` | get, list | Read the referenced `HardwareProfile` for the firmware/BIOS baseline (`ApplyingHardwareProfile`); only when `hardwareProfileName` is set |
@@ -1482,16 +1455,17 @@ Hub Cluster                               Remote Site
   | (core) | `events` | create, patch | Emit events on state transitions and failures |
   | `coordination.k8s.io` | `leases` | get, list, watch, create, update | Controller-runtime leader election |
 
-  Because the BMH is created early (in `Inspecting`) and must be deleted when a
-  server fails to match or is retried before it is published, the service account
-  needs `delete` on `baremetalhosts`. Kubernetes RBAC cannot restrict `delete` to
-  the subset of BMHs carrying the inventory-hold marker, so the constraint is
-  **enforced in controller logic**: the controller only ever deletes a BMH that
-  still has the `onboarding.openshift.io/inventory-hold` annotation, and never a
-  **published** (live infrastructure) BMH. This is backed by the OnboardingRequest
-  **deletion guard**, which blocks request teardown while any published BMH exists
-  (see [Deletion semantics](#deletion-semantics)). The `delete` grant is scoped to
-  BMHs only; the service account has no `delete` on `ocloudsites`/`resourcepools`.
+  The service account needs `delete` on `baremetalhosts` because the BMH is created
+  during onboarding and torn down on **de-onboarding** (a server removed from
+  `spec.servers`, or the request deleted) as well as when a server fails to match
+  before it is published. Kubernetes RBAC cannot express "only a BMH that is not in
+  use," so the constraint is **enforced in controller logic**: the finalizer deletes a
+  BMH only after confirming it is **not allocated or provisioned** (no referencing
+  AllocatedNode / NodeAllocationRequest, not past `available`) and after restoring the
+  BMC; an in-use host blocks de-onboarding until it is deprovisioned through the normal
+  provisioning workflow (see [Deletion semantics](#deletion-semantics)). The `delete`
+  grant is scoped to BMHs only; the service account has no `delete` on
+  `ocloudsites`/`resourcepools`.
 - No database dependency — all state in CRDs; the REST API server is a stateless,
   DB-free facade over them and runs under its own ClusterRole
   (`clusterrole_onboarding_server.yaml`), separate from the controller-manager's
