@@ -218,7 +218,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 			"error determining if the cluster is ready for policy configuration: %w", err)
 	}
 	if !clusterIsReadyForPolicyConfig {
-		t.updateClusterNotReadyStatus(allChildPoliciesInInform)
+		t.updateClusterNotReadyStatus(ctx, allChildPoliciesInInform)
 		return
 	}
 
@@ -234,7 +234,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 		// Check if expected policies generation has timed out.
 		policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
-		t.updatePolicyConfigPreparationStatus(policyConfigTimedOut)
+		t.updatePolicyConfigPreparationStatus(ctx, policyConfigTimedOut)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (t *provisioningRequestReconcilerTask) updateConfigurationAppliedStatus(
 
 	// Check if the policy configuration has timed out.
 	policyConfigTimedOut = t.hasPolicyConfigurationTimedOut(ctx)
-	t.updatePolicyConfigApplyingStatus(policyConfigTimedOut)
+	t.updatePolicyConfigApplyingStatus(ctx, policyConfigTimedOut)
 	return
 }
 
@@ -268,7 +268,7 @@ func (t *provisioningRequestReconcilerTask) setConfigurationAppliedStatus(
 	)
 }
 
-func (t *provisioningRequestReconcilerTask) updatePolicyConfigPreparationStatus(policyConfigTimedOut bool) {
+func (t *provisioningRequestReconcilerTask) updatePolicyConfigPreparationStatus(ctx context.Context, policyConfigTimedOut bool) {
 	var message string
 	var reason provisioningv1alpha1.ConditionReason
 
@@ -293,7 +293,7 @@ func (t *provisioningRequestReconcilerTask) updatePolicyConfigPreparationStatus(
 	}
 	t.setConfigurationAppliedStatus(reason, message)
 
-	t.logger.Info(
+	t.logger.InfoContext(ctx,
 		fmt.Sprintf(
 			"Cluster (%s) configuration status: %s",
 			t.object.Status.Extensions.ClusterDetails.Name,
@@ -302,7 +302,7 @@ func (t *provisioningRequestReconcilerTask) updatePolicyConfigPreparationStatus(
 	)
 }
 
-func (t *provisioningRequestReconcilerTask) updatePolicyConfigApplyingStatus(policyConfigTimedOut bool) {
+func (t *provisioningRequestReconcilerTask) updatePolicyConfigApplyingStatus(ctx context.Context, policyConfigTimedOut bool) {
 	var message string
 	var reason provisioningv1alpha1.ConditionReason
 
@@ -327,7 +327,7 @@ func (t *provisioningRequestReconcilerTask) updatePolicyConfigApplyingStatus(pol
 	}
 	t.setConfigurationAppliedStatus(reason, message)
 
-	t.logger.Info(
+	t.logger.InfoContext(ctx,
 		fmt.Sprintf(
 			"Cluster (%s) configuration status: %s",
 			t.object.Status.Extensions.ClusterDetails.Name,
@@ -336,7 +336,7 @@ func (t *provisioningRequestReconcilerTask) updatePolicyConfigApplyingStatus(pol
 	)
 }
 
-func (t *provisioningRequestReconcilerTask) updateClusterNotReadyStatus(allChildPoliciesInInform bool) {
+func (t *provisioningRequestReconcilerTask) updateClusterNotReadyStatus(ctx context.Context, allChildPoliciesInInform bool) {
 	t.setConfigurationAppliedStatus(
 		provisioningv1alpha1.CRconditionReasons.ClusterNotReady,
 		"The Cluster is not yet ready")
@@ -348,7 +348,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterNotReadyStatus(allChild
 			"Waiting for cluster to be ready for policy configuration")
 	}
 
-	t.logger.Info(fmt.Sprintf(
+	t.logger.InfoContext(ctx, fmt.Sprintf(
 		"Cluster (%s) is not ready for policy configuration",
 		t.object.Status.Extensions.ClusterDetails.Name,
 	))

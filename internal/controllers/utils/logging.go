@@ -23,6 +23,7 @@ import (
 // Standard logging attribute names
 const (
 	LogAttrResource        = "resource"
+	LogAttrResourceName    = "resourceName"
 	LogAttrNamespace       = "namespace"
 	LogAttrResourceVersion = "resourceVersion"
 	LogAttrGeneration      = "generation"
@@ -36,6 +37,7 @@ const (
 // LogReconcileStart adds standard reconciliation context and logs start message
 func LogReconcileStart(ctx context.Context, logger *slog.Logger, req ctrl.Request, resourceType string) context.Context {
 	ctx = logging.AppendCtx(ctx, slog.String(LogAttrResource, resourceType))
+	ctx = logging.AppendCtx(ctx, slog.String(LogAttrResourceName, req.Name))
 	ctx = logging.AppendCtx(ctx, slog.String(LogAttrNamespace, req.Namespace))
 	ctx = logging.AppendCtx(ctx, slog.String(LogAttrAction, "reconcile_start"))
 

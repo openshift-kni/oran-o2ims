@@ -178,8 +178,7 @@ func (t *clusterTemplateReconcilerTask) run(ctx context.Context) (ctrl.Result, e
 	ctx = ctlrutils.LogPhaseStart(ctx, t.logger, "validation")
 	valid, err := t.validateClusterTemplateCR(ctx)
 	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Failed to validate ClusterTemplate", err,
-			slog.String("name", t.object.Name))
+		ctlrutils.LogError(ctx, t.logger, "Failed to validate ClusterTemplate", err)
 		return requeueWithError(err)
 	}
 	if !valid {
@@ -243,10 +242,9 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 
 	if shouldSkipClusterImageSetValidation {
 		t.logger.InfoContext(ctx, "Skipping ClusterImageSet validation due to annotation",
-			slog.String("name", t.object.Name),
 			slog.String("annotation", ctlrutils.SkipClusterImageSetValidationAnnotation))
 	} else {
-		t.logger.InfoContext(ctx, "Validating ClusterImageSet", slog.String("name", t.object.Name))
+		t.logger.InfoContext(ctx, "Validating ClusterImageSet")
 		err = t.validateClusterImageSetMatchesRelease(ctx)
 		if err != nil {
 			if !typederrors.IsInputError(err) {
@@ -292,11 +290,9 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	validationErrsMsg := strings.Join(validationErrs, ";")
 	if validationErrsMsg != "" {
 		t.logger.ErrorContext(ctx, "ClusterTemplate validation failed",
-			slog.String("name", t.object.Name),
 			slog.String("validationErrors", validationErrsMsg))
 	} else {
-		t.logger.InfoContext(ctx, "ClusterTemplate validation passed",
-			slog.String("name", t.object.Name))
+		t.logger.InfoContext(ctx, "ClusterTemplate validation passed")
 	}
 
 	err = t.updateStatusConditionValidated(ctx, validationErrsMsg)
@@ -946,8 +942,7 @@ func (t *clusterTemplateReconcilerTask) updateStatusConditionValidated(ctx conte
 
 	err := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object)
 	if err != nil {
-		ctlrutils.LogError(ctx, t.logger, "Failed to update ClusterTemplate status", err,
-			slog.String("name", t.object.Name))
+		ctlrutils.LogError(ctx, t.logger, "Failed to update ClusterTemplate status", err)
 		return fmt.Errorf("failed to update status for ClusterTemplate %s: %w", t.object.Name, err)
 	}
 

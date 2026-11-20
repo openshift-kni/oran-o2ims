@@ -332,12 +332,12 @@ func (t *provisioningRequestReconcilerTask) executeClusterInstallationPhase(ctx 
 
 	// Check cluster provision status
 	if !ctlrutils.IsClusterProvisionPresent(t.object) {
-		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing", slog.String("name", t.object.Name))
+		t.logger.InfoContext(ctx, "ClusterProvision not present, requeueing")
 		return requeueWithShortInterval(), nil
 	} else if ctlrutils.IsClusterProvisionTimedOutOrFailed(t.object) {
 		// Even after timeout/failure, continue monitoring for cleanup completion
 		// This allows detection of manual recovery or cleanup progress
-		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, monitoring cleanup", slog.String("name", t.object.Name))
+		t.logger.InfoContext(ctx, "ClusterProvision timed out or failed, monitoring cleanup")
 		return requeueWithLongInterval(), nil
 	}
 
@@ -754,7 +754,6 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 	timeoutDetected := t.checkClusterInstallationTimeout(ctx)
 	if timeoutDetected {
 		t.logger.WarnContext(ctx, "Cluster installation timeout detected",
-			slog.String("name", t.object.Name),
 			slog.Duration("timeout", t.timeouts.clusterProvisioning))
 		// Continue to monitor even after timeout to detect cleanup completion
 		return requeueWithMediumInterval(), nil
@@ -784,8 +783,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterDeployConfigState(ctx co
 		if err != nil {
 			// Don't stop on status check errors - timeout monitoring must continue
 			t.logger.WarnContext(ctx, "Failed to check cluster provision status, continuing monitoring",
-				slog.Any("error", err),
-				slog.String("name", t.object.Name))
+				slog.Any("error", err))
 			// Continue with timeout monitoring even if status check fails
 		}
 	}
@@ -880,8 +878,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterInstallationTimeout(ctx 
 		// The next reconciliation will detect the timeout again if status update fails
 		if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 			t.logger.WarnContext(ctx, "Failed to update timeout status, will retry next reconciliation",
-				slog.Any("error", updateErr),
-				slog.String("name", t.object.Name))
+				slog.Any("error", updateErr))
 		}
 
 		return true
@@ -926,7 +923,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 		validationFailureMsg := "Failed to validate the ProvisioningRequest"
 		validationFailureMsgWithError := validationFailureMsg + ": " + err.Error()
 		if isSeedGenerationTransientError(err) {
-			t.logger.WarnContext(ctx, validationFailureMsg, slog.Any("error", err), slog.String("name", t.object.Name))
+			t.logger.WarnContext(ctx, validationFailureMsg, slog.Any("error", err))
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.Validated,
 				provisioningv1alpha1.CRconditionReasons.InProgress,
@@ -934,7 +931,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 				validationFailureMsgWithError,
 			)
 		} else {
-			ctlrutils.LogError(ctx, t.logger, validationFailureMsg, err, slog.String("name", t.object.Name))
+			ctlrutils.LogError(ctx, t.logger, validationFailureMsg, err)
 			ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 				provisioningv1alpha1.PRconditionTypes.Validated,
 				provisioningv1alpha1.CRconditionReasons.Failed,
@@ -945,8 +942,7 @@ func (t *provisioningRequestReconcilerTask) handleValidation(ctx context.Context
 			ctlrutils.SetProvisioningStateFailed(t.object, validationFailureMsgWithError)
 		}
 	} else {
-		t.logger.InfoContext(ctx, "Validated the ProvisioningRequest CR",
-			slog.String("name", t.object.Name))
+		t.logger.InfoContext(ctx, "Validated the ProvisioningRequest CR")
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.Validated,
 			provisioningv1alpha1.CRconditionReasons.Completed,
@@ -968,8 +964,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 	// attempts that would be blocked by the ClusterInstance admission webhook during active provisioning.
 	if existingCI, canSkip := t.canSkipClusterInstanceRendering(ctx); canSkip {
 		t.logger.InfoContext(ctx,
-			"Skipping ClusterInstance re-rendering: cluster installation already in progress",
-			slog.String("name", t.object.Name))
+			"Skipping ClusterInstance re-rendering: cluster installation already in progress")
 
 		return existingCI, nil
 	}
@@ -978,7 +973,7 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 	if err != nil {
 		clusterInstanceFailureMsg := "Failed to render and validate ClusterInstance"
 		clusterInstanceFailureMsgWithError := clusterInstanceFailureMsg + ": " + err.Error()
-		ctlrutils.LogError(ctx, t.logger, clusterInstanceFailureMsg, err, slog.String("name", t.object.Name))
+		ctlrutils.LogError(ctx, t.logger, clusterInstanceFailureMsg, err)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterInstanceRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
@@ -991,7 +986,6 @@ func (t *provisioningRequestReconcilerTask) handleRenderClusterInstance(ctx cont
 		t.logger.InfoContext(
 			ctx,
 			"Successfully rendered the ClusterInstance and validated it with dry-run",
-			slog.String("name", t.object.Name),
 		)
 
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
@@ -1080,7 +1074,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 	if err != nil {
 		clusterResourceFailureMsg := "Failed to apply the required cluster resource"
 		clusterResourceFailureMsgWithError := clusterResourceFailureMsg + ": " + err.Error()
-		ctlrutils.LogError(ctx, t.logger, clusterResourceFailureMsg, err, slog.String("name", t.object.Name))
+		ctlrutils.LogError(ctx, t.logger, clusterResourceFailureMsg, err)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.ClusterResourcesCreated,
 			provisioningv1alpha1.CRconditionReasons.Failed,
@@ -1093,7 +1087,6 @@ func (t *provisioningRequestReconcilerTask) handleClusterResources(ctx context.C
 		t.logger.InfoContext(
 			ctx,
 			"Applied the required cluster resources for ProvisioningRequest",
-			slog.String("name", t.object.Name),
 		)
 
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
@@ -1116,7 +1109,7 @@ func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(
 	if err != nil {
 		narRenderFailureMsg := "Failed to build the NodeAllocationRequest"
 		narRenderFailureMsgWithError := narRenderFailureMsg + ": " + err.Error()
-		ctlrutils.LogError(ctx, t.logger, narRenderFailureMsg, err, slog.String("name", t.object.Name))
+		ctlrutils.LogError(ctx, t.logger, narRenderFailureMsg, err)
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
 			provisioningv1alpha1.PRconditionTypes.NodeAllocationRequestRendered,
 			provisioningv1alpha1.CRconditionReasons.Failed,
@@ -1129,7 +1122,6 @@ func (t *provisioningRequestReconcilerTask) renderNodeAllocationRequest(
 		t.logger.InfoContext(
 			ctx,
 			"Successfully built NodeAllocationRequest",
-			slog.String("name", t.object.Name),
 		)
 
 		ctlrutils.SetStatusCondition(&t.object.Status.Conditions,
@@ -1164,8 +1156,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 			return requeueImmediately(), false, nil
 		}
 	} else if controllerutil.ContainsFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
-		r.Logger.InfoContext(ctx, "ProvisioningRequest is being deleted",
-			slog.String("name", provisioningRequest.Name))
+		r.Logger.InfoContext(ctx, "ProvisioningRequest is being deleted")
 		deleteComplete, err := r.handleProvisioningRequestDeletion(ctx, provisioningRequest)
 		if !deleteComplete {
 			return requeueWithShortInterval(), true, err
@@ -1173,7 +1164,7 @@ func (r *ProvisioningRequestReconciler) handleFinalizer(
 
 		// Deletion has completed. Remove provisioningRequestFinalizer. Once all finalizers have been
 		// removed, the object will be deleted.
-		r.Logger.InfoContext(ctx, "Dependents have been deleted. Removing provisioningRequest finalizer", slog.String("name", provisioningRequest.Name))
+		r.Logger.InfoContext(ctx, "Dependents have been deleted. Removing provisioningRequest finalizer")
 		patch := client.MergeFrom(provisioningRequest.DeepCopy())
 		if controllerutil.RemoveFinalizer(provisioningRequest, provisioningv1alpha1.ProvisioningRequestFinalizer) {
 			if err := r.Patch(ctx, provisioningRequest, patch); err != nil {

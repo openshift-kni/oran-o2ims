@@ -786,7 +786,6 @@ func (t *reconcilerTask) run(ctx context.Context) (nextReconcile ctrl.Result, er
 		t.logger.ErrorContext(
 			ctx,
 			"Failed to update status for Inventory",
-			slog.String("name", t.object.Name),
 		)
 		nextReconcile = ctrl.Result{RequeueAfter: 30 * time.Second}
 	}

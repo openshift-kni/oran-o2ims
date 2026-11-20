@@ -65,7 +65,6 @@ func (t *provisioningRequestReconcilerTask) buildClusterInstance(
 	t.logger.InfoContext(
 		ctx,
 		"Rendering the ClusterInstance template for ProvisioningRequest",
-		slog.String("name", t.object.Name),
 	)
 
 	// Build an initial unstructured ClusterInstance using the merged ClusterInstance data
@@ -1003,7 +1002,7 @@ func (t *provisioningRequestReconcilerTask) checkClusterProvisionStatus(
 	}
 	// Check ClusterInstance status and update the corresponding ProvisioningRequest status conditions.
 	t.updateClusterInstanceProcessedStatus(clusterInstance)
-	t.updateClusterProvisionStatus(clusterInstance)
+	t.updateClusterProvisionStatus(ctx, clusterInstance)
 
 	if updateErr := ctlrutils.UpdateK8sCRStatus(ctx, t.client, t.object); updateErr != nil {
 		return fmt.Errorf("failed to update status for ProvisioningRequest %s: %w", t.object.Name, updateErr)
@@ -1141,7 +1140,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterInstanceProcessedStatus
 	)
 }
 
-func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *siteconfig.ClusterInstance) {
+func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ctx context.Context, ci *siteconfig.ClusterInstance) {
 	if ci == nil {
 		return
 	}
@@ -1206,7 +1205,7 @@ func (t *provisioningRequestReconcilerTask) updateClusterProvisionStatus(ci *sit
 		}
 	}
 
-	t.logger.Info(
+	t.logger.InfoContext(ctx,
 		fmt.Sprintf("ClusterInstance (%s) installation status: %s", ci.Name, message),
 	)
 }

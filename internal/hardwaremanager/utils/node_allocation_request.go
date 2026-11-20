@@ -159,7 +159,6 @@ func UpdateNodeAllocationRequestStatusCondition(
 			newNodeAllocationRequest.Spec.ConfigTransactionId == nodeAllocationRequest.Spec.ConfigTransactionId
 		if !specUnchanged {
 			slog.DebugContext(ctx, "NodeAllocationRequest spec advanced during status update, not acknowledging observed status",
-				slog.String("nar", nodeAllocationRequest.Name),
 				slog.Int64("validatedGeneration", nodeAllocationRequest.ObjectMeta.Generation),
 				slog.Int64("currentGeneration", newNodeAllocationRequest.ObjectMeta.Generation),
 				slog.Int64("validatedConfigTransactionId", nodeAllocationRequest.Spec.ConfigTransactionId),

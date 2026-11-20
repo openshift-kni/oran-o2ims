@@ -1590,8 +1590,7 @@ func allocateBMHToNodeAllocationRequest(
 	}
 
 	logger.InfoContext(ctx, "Allocated BMH to NodeAllocationRequest",
-		slog.String("nodeName", nodeName),
-		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+		slog.String("nodeName", nodeName))
 
 	return nodeName, nil
 }
@@ -1947,8 +1946,7 @@ func clearBMHUpdateAnnotationsForNAR(
 	logger *slog.Logger,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
-	logger.InfoContext(ctx, "Clearing BMH update annotations for NodeAllocationRequest",
-		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+	logger.InfoContext(ctx, "Clearing BMH update annotations for NodeAllocationRequest")
 
 	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
@@ -1997,8 +1995,7 @@ func clearConfigAnnotationForAllocatedNodes(
 	logger *slog.Logger,
 	nodeAllocationRequest *hwmgmtv1alpha1.NodeAllocationRequest,
 ) error {
-	logger.InfoContext(ctx, "Clearing config-in-progress annotations for AllocatedNodes",
-		slog.String("nodeAllocationRequest", nodeAllocationRequest.Name))
+	logger.InfoContext(ctx, "Clearing config-in-progress annotations for AllocatedNodes")
 
 	nodeList, err := hwmgrutils.GetChildNodes(ctx, logger, c, nodeAllocationRequest)
 	if err != nil {
