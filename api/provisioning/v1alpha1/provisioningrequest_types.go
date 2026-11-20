@@ -61,7 +61,8 @@ type ClusterDetails struct {
 	// Holds the first timestamp when the configuration was found NonCompliant for the cluster.
 	NonCompliantAt *metav1.Time `json:"nonCompliantAt,omitempty"`
 
-	// ClusterUpgradeStatus holds the state of a cluster upgrade in progress.
+	// ClusterUpgradeStatus holds the state of a cluster upgrade in progress and the
+	// version of the last completed upgrade.
 	ClusterUpgradeStatus *ClusterUpgradeStatus `json:"clusterUpgradeStatus,omitempty"`
 
 	// SeedGenerationStatus holds the state and results of a one-shot seed generation.
@@ -104,6 +105,13 @@ type ClusterUpgradeStatus struct {
 	// WorkerPoolUpgrade is the resolved worker MachineConfigPool rollout
 	// configuration prepared from the current upgrade parameters.
 	WorkerPoolUpgrade *WorkerPoolUpgradeStatus `json:"workerPoolUpgrade,omitempty"`
+
+	// LastUpgradedVersion is the target version of the last completed cluster upgrade.
+	// It is set when an upgrade completes if the ManagedCluster openshiftVersion label
+	// reports an earlier version, or if the versions cannot be compared. It is cleared
+	// once the label reports this version or a higher one, or when the ClusterTemplate
+	// release is no longer above the version the label reports.
+	LastUpgradedVersion string `json:"lastUpgradedVersion,omitempty"`
 }
 
 // SeedGenerationStatus records progress and artifacts of one seed run.

@@ -31,6 +31,31 @@ type WorkerPoolUpgradeStage struct {
 	Pools []string `json:"pools"`
 }
 
+// ValidateIBGUPlan requires Prep before Upgrade in an effective IBGU plan.
+func ValidateIBGUPlan(ibgu map[string]any) error {
+	plan, _ := ibgu["plan"].([]any)
+	var hasPrep, hasUpgrade, upgradeBeforePrep bool
+	for _, item := range plan {
+		step, _ := item.(map[string]any)
+		actions, _ := step["actions"].([]any)
+		for _, action := range actions {
+			switch action {
+			case "Prep":
+				hasPrep = true
+			case "Upgrade":
+				hasUpgrade = true
+				if !hasPrep {
+					upgradeBeforePrep = true
+				}
+			}
+		}
+	}
+	if !hasPrep || !hasUpgrade || upgradeBeforePrep {
+		return typederrors.NewInputError("imageBasedGroupUpgrade plan must include Prep followed by Upgrade")
+	}
+	return nil
+}
+
 // ValidateCVUpgradeData validates the semantic business rules for
 // clusterVersion upgrade parameters. It checks:
 //   - desiredUpdate.version, if set, matches releaseVersion

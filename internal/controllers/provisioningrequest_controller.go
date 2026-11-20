@@ -528,10 +528,7 @@ func (t *provisioningRequestReconcilerTask) handleClusterUpgrades(
 	}
 
 	// Enter upgrade handling if upgrade is needed or actively in progress.
-	if shouldUpgrade ||
-		(ctlrutils.IsClusterUpgradeInitiated(t.object) &&
-			!ctlrutils.IsClusterUpgradeCompleted(t.object) &&
-			!ctlrutils.IsClusterUpgradeInTerminalFailure(t.object)) {
+	if shouldUpgrade || ctlrutils.IsClusterUpgradeInProgress(t.object) {
 		upgradeCtrlResult, proceed, err := t.handleUpgrade(ctx, clusterName, clusterTemplate)
 		if upgradeCtrlResult.RequeueAfter > 0 || !proceed || err != nil {
 			// Requeue if the upgrade is in progress or an error occurs.

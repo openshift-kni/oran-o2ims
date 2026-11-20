@@ -15,6 +15,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/provisioning"
 	"github.com/openshift-kni/oran-o2ims/internal/validation"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -93,21 +94,48 @@ func validateHwMgmtHwProfiles(ctx context.Context, c client.Client,
 // release version. Schema validation is handled separately; this covers
 // semantic constraints that schema cannot express.
 func validateUpgradeInput(r *provisioningv1alpha1.ProvisioningRequest, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
-	if r.Spec.TemplateParameters.Raw == nil {
-		return nil
-	}
-
-	upgradeParamsRaw, err := validation.ExtractMatchingInput(r.Spec.TemplateParameters.Raw, constants.TemplateParamUpgrade)
-	if err != nil {
-		return nil
-	}
-	upgradeParams, ok := upgradeParamsRaw.(map[string]any)
-	if !ok {
-		return fmt.Errorf("spec.templateParameters.%s must be an object", constants.TemplateParamUpgrade)
+	upgradeParams := map[string]any{}
+	if len(r.Spec.TemplateParameters.Raw) > 0 {
+		upgradeParamsRaw, err := validation.ExtractMatchingInput(r.Spec.TemplateParameters.Raw, constants.TemplateParamUpgrade)
+		if err == nil {
+			var ok bool
+			upgradeParams, ok = upgradeParamsRaw.(map[string]any)
+			if !ok {
+				return fmt.Errorf("spec.templateParameters.%s must be an object", constants.TemplateParamUpgrade)
+			}
+		}
 	}
 
 	if err := validation.ValidateCVUpgradeData(upgradeParams, clusterTemplate.Spec.Release, constants.TemplateParamUpgrade); err != nil {
 		return fmt.Errorf("spec.templateParameters.%s: %w", constants.TemplateParamUpgrade, err)
+	}
+
+	mergedUpgradeData := map[string]any{}
+	if len(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw) > 0 {
+		if err := json.Unmarshal(clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults.Raw, &mergedUpgradeData); err != nil {
+			return fmt.Errorf("invalid upgradeDefaults: %w", err)
+		}
+	}
+	_, hasIBGUDefaults := mergedUpgradeData[ctlrutils.UpgradeDefaultsIBGUKey]
+	_, hasIBGUParams := upgradeParams[ctlrutils.UpgradeDefaultsIBGUKey]
+	if !hasIBGUDefaults && !hasIBGUParams {
+		return nil
+	}
+	if mergedUpgradeData == nil {
+		mergedUpgradeData = map[string]any{}
+	}
+	// TODO: Move DeepMergeMaps to a shared utility package outside controllers.
+	if err := ctlrutils.DeepMergeMaps(mergedUpgradeData, upgradeParams, false, nil); err != nil {
+		return fmt.Errorf("failed to merge upgrade parameters: %w", err)
+	}
+	if value, exists := mergedUpgradeData[ctlrutils.UpgradeDefaultsIBGUKey]; exists {
+		ibgu, ok := value.(map[string]any)
+		if !ok {
+			return fmt.Errorf("imageBasedGroupUpgrade must be an object")
+		}
+		if err := validation.ValidateIBGUPlan(ibgu); err != nil {
+			return fmt.Errorf("invalid imageBasedGroupUpgrade configuration: %w", err)
+		}
 	}
 
 	return nil
