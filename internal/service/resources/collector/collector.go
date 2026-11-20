@@ -12,9 +12,12 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"k8s.io/client-go/util/workqueue"
 
 	inventoryv1alpha1 "github.com/openshift-kni/oran-o2ims/api/inventory/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/logging"
@@ -29,6 +32,11 @@ import (
 
 // asyncEventBufferSize defines the number of buffered entries in the async event channel
 const asyncEventBufferSize = 10
+
+const (
+	gpuInventoryRetryInitialDelay = time.Second
+	gpuInventoryRetryMaxDelay     = time.Minute
+)
 
 // DataSource represents the operations required to be supported by any objects implementing a
 // data collection backend.
@@ -66,22 +74,97 @@ type NotificationHandler interface {
 
 // Collector defines the attributes required by the collector implementation.
 type Collector struct {
-	pool                *pgxpool.Pool // Direct pool injection for transaction operations
-	notificationHandler NotificationHandler
-	repository          *repo.ResourcesRepository
-	dataSources         []DataSource
-	AsyncChangeEvents   chan *async.AsyncChangeEvent
-	alarmDictCache      map[string]*uuid.UUID
+	pool                        *pgxpool.Pool // Direct pool injection for transaction operations
+	notificationHandler         NotificationHandler
+	repository                  *repo.ResourcesRepository
+	dataSources                 []DataSource
+	AsyncChangeEvents           chan *async.AsyncChangeEvent
+	alarmDictCache              map[string]*uuid.UUID
+	gpuInventoryRetryMu         sync.Mutex
+	gpuInventoryRetryLimiter    workqueue.TypedRateLimiter[gpuInventoryRetryKey]
+	gpuInventoryRetryQueue      workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey]
+	gpuInventoryRetryEvents     map[gpuInventoryRetryKey]*async.AsyncChangeEvent
+	gpuInventoryRetryWorkerOnce sync.Once
 }
 
 // NewCollector creates a new collector instance
 func NewCollector(pool *pgxpool.Pool, repo *repo.ResourcesRepository, notificationHandler NotificationHandler, dataSources []DataSource) *Collector {
+	limiter, queue := newGPUInventoryRetryQueue()
 	return &Collector{
-		pool:                pool,
-		repository:          repo,
-		notificationHandler: notificationHandler,
-		dataSources:         dataSources,
-		AsyncChangeEvents:   make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
+		pool:                     pool,
+		repository:               repo,
+		notificationHandler:      notificationHandler,
+		dataSources:              dataSources,
+		AsyncChangeEvents:        make(chan *async.AsyncChangeEvent, asyncEventBufferSize),
+		gpuInventoryRetryLimiter: limiter,
+		gpuInventoryRetryQueue:   queue,
+		gpuInventoryRetryEvents:  make(map[gpuInventoryRetryKey]*async.AsyncChangeEvent),
+	}
+}
+
+// newGPUInventoryRetryQueue builds the retry queue together with the rate
+// limiter it wraps, returning both so callers can ask the limiter for the exact
+// delay it assigns rather than recomputing the backoff schedule separately.
+func newGPUInventoryRetryQueue() (
+	workqueue.TypedRateLimiter[gpuInventoryRetryKey],
+	workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey],
+) {
+	limiter := workqueue.NewTypedItemExponentialFailureRateLimiter[gpuInventoryRetryKey](
+		gpuInventoryRetryInitialDelay,
+		gpuInventoryRetryMaxDelay,
+	)
+	return limiter, workqueue.NewTypedRateLimitingQueue(limiter)
+}
+
+func (c *Collector) ensureGPUInventoryRetryQueueLocked() {
+	if c.gpuInventoryRetryQueue == nil {
+		c.gpuInventoryRetryLimiter, c.gpuInventoryRetryQueue = newGPUInventoryRetryQueue()
+	}
+	if c.gpuInventoryRetryEvents == nil {
+		c.gpuInventoryRetryEvents = make(map[gpuInventoryRetryKey]*async.AsyncChangeEvent)
+	}
+}
+
+func (c *Collector) startGPUInventoryRetryWorker(ctx context.Context) {
+	c.gpuInventoryRetryWorkerOnce.Do(func() {
+		c.gpuInventoryRetryMu.Lock()
+		c.ensureGPUInventoryRetryQueueLocked()
+		queue := c.gpuInventoryRetryQueue
+		c.gpuInventoryRetryMu.Unlock()
+		go func() {
+			<-ctx.Done()
+			queue.ShutDown()
+		}()
+		go c.runGPUInventoryRetryWorker(ctx, queue)
+	})
+}
+
+func (c *Collector) runGPUInventoryRetryWorker(
+	ctx context.Context,
+	queue workqueue.TypedRateLimitingInterface[gpuInventoryRetryKey],
+) {
+	for {
+		key, shutdown := queue.Get()
+		if shutdown {
+			return
+		}
+
+		c.gpuInventoryRetryMu.Lock()
+		event := c.gpuInventoryRetryEvents[key]
+		c.gpuInventoryRetryMu.Unlock()
+		if event == nil {
+			queue.Forget(key)
+			queue.Done(key)
+			continue
+		}
+
+		select {
+		case <-ctx.Done():
+			queue.Done(key)
+			return
+		case c.AsyncChangeEvents <- event:
+			queue.Done(key)
+		}
 	}
 }
 
@@ -95,18 +178,64 @@ func (c *Collector) Run(ctx context.Context) error {
 	if err := c.watchForChanges(ctx); err != nil {
 		return fmt.Errorf("failed to start listeners: %w", err)
 	}
+	c.startGPUInventoryRetryWorker(ctx)
 
 	for {
 		select {
 		case event := <-c.AsyncChangeEvents:
 			if err := c.handleAsyncEvent(ctx, event); err != nil {
-				slog.ErrorContext(ctx, "failed to handle async change", slog.Any("event", event), slog.Any("error", err))
+				var persistenceError *gpuInventoryPersistenceError
+				if errors.As(err, &persistenceError) {
+					retryAttempt, delay := c.scheduleGPUInventoryUpdateRetry(event)
+					slog.WarnContext(ctx, "failed to persist GPU inventory; retry scheduled",
+						slog.Any("error", err),
+						slog.Int("retryAttempt", retryAttempt),
+						slog.Duration("retryAfter", delay))
+				} else {
+					slog.ErrorContext(ctx, "failed to handle async change", slog.Any("event", event), slog.Any("error", err))
+				}
 			}
 		case <-ctx.Done():
 			slog.InfoContext(ctx, "Context terminated; collector exiting")
 			return nil
 		}
 	}
+}
+
+func (c *Collector) scheduleGPUInventoryUpdateRetry(event *async.AsyncChangeEvent) (int, time.Duration) {
+	update, ok := event.Object.(gpuInventoryUpdate)
+	if !ok {
+		return 0, 0
+	}
+	key := gpuInventoryRetryKey{ResourceID: update.ResourceID, Version: update.Version}
+	retryEvent := *event
+	c.gpuInventoryRetryMu.Lock()
+	c.ensureGPUInventoryRetryQueueLocked()
+	for pendingKey := range c.gpuInventoryRetryEvents {
+		if pendingKey.ResourceID == update.ResourceID && pendingKey.Version != update.Version {
+			delete(c.gpuInventoryRetryEvents, pendingKey)
+			c.gpuInventoryRetryQueue.Forget(pendingKey)
+		}
+	}
+	c.gpuInventoryRetryEvents[key] = &retryEvent
+	// Ask the rate limiter for the delay directly and schedule with AddAfter so
+	// the logged delay is the exact value the limiter assigns (AddRateLimited
+	// would compute the same delay internally but not expose it).
+	delay := c.gpuInventoryRetryLimiter.When(key)
+	c.gpuInventoryRetryQueue.AddAfter(key, delay)
+	attempt := c.gpuInventoryRetryQueue.NumRequeues(key)
+	c.gpuInventoryRetryMu.Unlock()
+	return attempt, delay
+}
+
+func (c *Collector) completeGPUInventoryRetry(update gpuInventoryUpdate) {
+	key := gpuInventoryRetryKey{ResourceID: update.ResourceID, Version: update.Version}
+	c.gpuInventoryRetryMu.Lock()
+	defer c.gpuInventoryRetryMu.Unlock()
+	if c.gpuInventoryRetryQueue != nil {
+		c.gpuInventoryRetryQueue.Forget(key)
+	}
+	delete(c.gpuInventoryRetryEvents, key)
 }
 
 // init runs the onetime initialization steps for the collector
@@ -147,6 +276,9 @@ func (c *Collector) initDataSource(ctx context.Context, dataSource DataSource) e
 		dataSource.Init(*record.DataSourceID, record.GenerationID, c.AsyncChangeEvents)
 		slog.InfoContext(ctx, "restored data source",
 			slog.String("name", name), slog.String("uuid", record.DataSourceID.String()), slog.Int("generation", record.GenerationID))
+	}
+	if setter, ok := dataSource.(gpuInventoryResourceReaderSetter); ok {
+		setter.setGPUInventoryResourceReader(c.repository)
 	}
 	return nil
 }
@@ -375,9 +507,61 @@ func (c *Collector) handleAsyncEvent(ctx context.Context, event *async.AsyncChan
 		return c.handleAsyncResourceTypeEvent(ctx, value, event.EventType == async.Deleted)
 	case models.Resource:
 		return c.handleAsyncResourceEvent(ctx, value, event.EventType == async.Deleted)
+	case gpuInventoryUpdate:
+		return c.handleAsyncGPUInventoryUpdate(ctx, event.DataSourceID, value)
 	default:
 		return fmt.Errorf("unknown object type '%T'", event.Object)
 	}
+}
+
+func (c *Collector) handleAsyncGPUInventoryUpdate(
+	ctx context.Context,
+	dataSourceID uuid.UUID,
+	update gpuInventoryUpdate,
+) error {
+	var validator gpuInventoryUpdateValidator
+	for _, dataSource := range c.dataSources {
+		if dataSource.GetID() == dataSourceID {
+			validator, _ = dataSource.(gpuInventoryUpdateValidator)
+			break
+		}
+	}
+	if validator == nil {
+		c.completeGPUInventoryRetry(update)
+		return fmt.Errorf("no GPU inventory source found for data source %s", dataSourceID)
+	}
+	if !validator.isCurrentGPUInventoryUpdate(update) {
+		c.completeGPUInventoryRetry(update)
+		return nil
+	}
+	if update.Inventory == nil {
+		validator.completeGPUInventoryUpdate(update)
+		c.completeGPUInventoryRetry(update)
+		return fmt.Errorf("gpu inventory update for resource %s has no inventory", update.ResourceID)
+	}
+
+	resource, err := c.repository.GetResource(ctx, update.ResourceID)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		validator.completeGPUInventoryUpdate(update)
+		c.completeGPUInventoryRetry(update)
+		return nil
+	}
+	if err != nil {
+		return &gpuInventoryPersistenceError{err: fmt.Errorf(
+			"failed to load resource %s for GPU inventory update: %w", update.ResourceID, err)}
+	}
+	if resource.DataSourceID != dataSourceID {
+		validator.completeGPUInventoryUpdate(update)
+		c.completeGPUInventoryRetry(update)
+		return nil
+	}
+	setGPUInventory(resource, update.Inventory, update.BMCFingerprint)
+	if err := c.handleAsyncResourceEvent(ctx, *resource, false); err != nil {
+		return &gpuInventoryPersistenceError{err: err}
+	}
+	validator.completeGPUInventoryUpdate(update)
+	c.completeGPUInventoryRetry(update)
+	return nil
 }
 
 // handleAsyncDeploymentManagerEvent handles an async event received for a ClusterResource object.
