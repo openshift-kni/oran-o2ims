@@ -380,6 +380,24 @@ type OnboardingServerSummary struct {
 }
 ```
 
+**Field availability (phased delivery).** The spec above is the **target** shape;
+the CRD is built up over the phases in the
+[Implementation Plan](server-onboarding-implementation-plan.md), **not** all at once.
+To avoid committing to a field shape before the dependent Metal3 API is finalized,
+each Metal3-dependent field is added **with the phase that implements it** (alongside
+its validation, controller behavior, and tests), not in the v1 CRD:
+
+| Field(s) | Delivered in | Gated on |
+|---|---|---|
+| `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, descriptions, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `servers[]` (`bmcAddress`, `desiredCredentialsVaultSecret`) | **v1** basic flow | METAL-1784 |
+| `bmcSubnet`, `bmcGateway` | BMC address-pinning phase | OCPSTRAT-3585 |
+| `disableBmcCertificateVerification` | BMC credential-provisioning phase | OCPSTRAT-3519 |
+| `authMode`, `ldapConfig` | LDAP mode phase | OCPSTRAT-3552 |
+| `hardwareProfileName` | Firmware/BIOS baseline phase | — (reuses the existing hardware-manager profile path) |
+
+Until a field's phase lands it is not part of the served CRD, so the API never
+commits to a shape that the forthcoming Metal3 APIs might change.
+
 **Printcolumns:** OnboardingState (the `Onboarded` condition's reason), Total
 (`totalServerCount`), Pending (`pendingServerCount`), In-Progress
 (`inProgressServerCount`), Completed (`completedServerCount`), Failed
