@@ -37,9 +37,10 @@ created depend on `authMode` and whether shared secrets already exist:
   - `<onboardingRequestName>-<serverName>-desired-creds` — target BMC credentials unique to this server.
 
   Here and throughout this document, `<serverName>` is the OnboardingServer CR's
-  `metadata.name` — the collision-safe name derived from the server's
-  `bmcAddress` (see [OnboardingServer CR naming](server-onboarding-service.md#1-api-design-crds)). The
-  examples show only its readable stem (e.g. `10-10-10-101`).
+  `metadata.name` — the **deterministic UUID** derived from the pool plus the
+  server's `bmcAddress` (see [OnboardingServer CR naming](server-onboarding-service.md#1-api-design-crds)),
+  so the per-server Secret is really `<uuid>-desired-creds`. The examples show a
+  readable `10-10-10-101`-style placeholder in place of the UUID.
 
 Each ExternalSecret references the `ClusterSecretStore` configured globally on the
 onboarding controller (via `--secret-store-name` flag or `SECRET_STORE_NAME` env
@@ -112,7 +113,7 @@ see [Hardware attribute matching](server-onboarding-service.md#1-api-design-crds
 
 On either mismatch the controller **deletes the held BMH** (it is still on
 inventory-hold and has never been published, so deletion is safe and removes the
-host from the pool namespace) and counts the server in `serversFailed`. On a full
+host from the pool namespace) and counts the server in `failedServerCount`. On a full
 match, transition to `ApplyingHardwareProfile` when `spec.hardwareProfileName` is
 set, or straight to `PinningBmcAddress` when it is not.
 
@@ -607,22 +608,23 @@ The examples below write the BMH as `onboarded-<bmcAddress>` for readability, bu
 raw address is not safe to use directly as a Kubernetes object name (dots/colons,
 IPv6 uppercase and `::` compression). Crucially, the BMH is created **before**
 inspection runs, so the server's **serial number is not yet known** and cannot be
-used in the name — the name must derive from the `bmcAddress`, which is known up
-front and validated unique within the pool.
+used in the name — the name must derive from an identity known up front: the pool
+plus the server's `bmcAddress`.
 
-The BMH name is therefore derived from the `bmcAddress` using the same
-collision-safe, canonicalize-then-stem-plus-hash approach as the OnboardingServer
-name (see [OnboardingServer CR naming](server-onboarding-service.md#1-api-design-crds)): canonicalize the
-address (RFC 5952 for IPv6), build a readable stem (lowercase, `.`/`:` → `-`),
-prefix the address family (`v4-`/`v6-`), and append an 8-character SHA-256 suffix
-over the canonical address. Because `bmcAddress` is unique within the pool, the
-BMH name is unique within the resource pool namespace.
+The BMH name is therefore `onboarded-<uuid>`, where `<uuid>` is the same
+**deterministic UUID (UUIDv5)** used for the OnboardingServer CR — computed over the
+resource pool identity plus the canonicalized `bmcAddress` (see
+[OnboardingServer CR naming](server-onboarding-service.md#1-api-design-crds)). A
+UUID is always a fixed-length, valid RFC-1123 label, so it avoids the `.`/`:`,
+IPv6-case, and trailing-hyphen pitfalls and needs no length budget; and because it
+is deterministic over `bmcAddress` (unique within the pool), the BMH name is unique
+within the resource pool namespace and stable across re-onboarding. The per-host
+credential Secret is `<uuid>-desired-creds`.
 
-So `onboarded-<bmcAddress>` is really `onboarded-<v4|v6>-<addr-stem>-<hash>`, e.g.
-`onboarded-v4-10-10-10-101-a1b2c3d4`.
-The OnboardingServer records the final BMH name in `status.bmhName`, so the
-mapping is always observable. For brevity, the examples below show only
-`onboarded-<bmcAddress>` (e.g. `onboarded-10-10-10-101`).
+The OnboardingServer records the final BMH name in `status.bmhName` (and exposes
+the BMC address as a printer column), so the mapping is always observable. For
+brevity, the examples below show a readable `onboarded-10-10-10-101`-style name in
+place of the UUID.
 
 ### BMH creation (Inspecting state)
 
@@ -941,10 +943,12 @@ RBAC table:
 - `Warning` on every terminal failure (`AuthFailed`, `VendorMismatch`, `HwMismatch`, `Failed`), carrying the same detail as `status.stateMessage` — **never** credential values (see [Security Considerations](server-onboarding-service.md#4-security-considerations)).
 - `Warning` on best-effort cleanup that could not complete (`CleanupPartial`).
 
-**Conditions and status** — the OnboardingRequest's `Ready` condition, summary
-counts, and `status.servers` per-server list give the roll-up and the compact
-per-server detail (name, state, message); this is exactly what the
-REST API returns. Each OnboardingServer's `status` holds the full detail, including
+**Conditions and status** — the OnboardingRequest's `Validated` and `Onboarded`
+conditions, summary counts, and `status.servers` per-server list give the roll-up
+and the compact per-server detail (name, state, message); this is exactly what the
+REST API returns. (`Validated` reports request validation; `Onboarded` reports the
+aggregated onboarding progress — its reason is surfaced as the `OnboardingState`
+printer column.) Each OnboardingServer's `status` holds the full detail, including
 `hardwareDetails`, surfaced by the `oc get` views in the
 [Walkthrough](#10-walkthrough).
 
@@ -1230,7 +1234,7 @@ oc apply -f onboarding-request.yaml
 
 On the first reconciliation, the OnboardingRequest controller performs the following (in order):
 
-1. **Looks up Location CR** `toronto-east` — found, continues. (If missing, sets `Ready=False, Reason=LocationNotFound` and stops.)
+1. **Looks up Location CR** `toronto-east` — found, continues. (If missing, sets `Validated=False, Reason=LocationNotFound` and stops.)
 
 2. **Creates OCloudSite CR** `site-toronto-east` (if it does not already exist):
 
@@ -1287,13 +1291,17 @@ On the first reconciliation, the OnboardingRequest controller performs the follo
    ```yaml
    status:
      conditions:
-       - type: Ready
+       - type: Validated
          status: "True"
-     serversTotal: 3
-     serversPending: 3
-     serversInProgress: 0
-     serversCompleted: 0
-     serversFailed: 0
+         reason: Completed
+       - type: Onboarded
+         status: "False"
+         reason: InProgress
+     totalServerCount: 3
+     pendingServerCount: 3
+     inProgressServerCount: 0
+     completedServerCount: 0
+     failedServerCount: 0
      servers:
        - name: 10-10-10-101
          state: Pending
@@ -1424,7 +1432,7 @@ and validates **both vendor and hardware** against the OnboardingRequest:
   case-insensitive substring rule — `dell` is a substring of `dell inc.`, so this
   passes (see [Vendor matching](server-onboarding-service.md#1-api-design-crds)). If it does not, transition to
   `VendorMismatch` (terminal), delete the held BMH, and count the server in
-  `serversFailed`.
+  `failedServerCount`.
 - **Hardware attributes** are checked next against `hardwareAttributes`, each using
   its `operator`:
   - **Match**: `model` == `PowerEdge R750`, and `memoryGiB` (512) `>=` 512 — all
@@ -1544,11 +1552,11 @@ The OnboardingRequest controller re-reconciles (triggered by the OnboardingServe
 
 ```yaml
 status:
-  serversTotal: 3
-  serversPending: 0
-  serversCompleted: 1
-  serversInProgress: 2
-  serversFailed: 0
+  totalServerCount: 3
+  pendingServerCount: 0
+  completedServerCount: 1
+  inProgressServerCount: 2
+  failedServerCount: 0
   servers:
     - name: 10-10-10-101
       state: Completed
@@ -1606,7 +1614,7 @@ Add to `spec.servers`:
       desiredCredentialsVaultSecret: bmc/pool1-server-105
 ```
 
-The webhook validates that existing entries are unchanged and new entries are valid. The OnboardingRequest controller creates two new OnboardingServer CRs on the next reconciliation, and the state machine processes them independently. `serversTotal` updates to 5.
+The webhook validates that existing entries are unchanged and new entries are valid. The OnboardingRequest controller creates two new OnboardingServer CRs on the next reconciliation, and the state machine processes them independently. `totalServerCount` updates to 5.
 
 ### Step 6: Handle failures
 

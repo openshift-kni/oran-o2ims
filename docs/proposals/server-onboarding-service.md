@@ -301,35 +301,55 @@ type RemoteRoleMapping struct {
 }
 
 type OnboardingRequestStatus struct {
+    // Conditions carries two distinct conditions so request validation and
+    // aggregated onboarding progress are not conflated (the earlier single "Ready"
+    // was ambiguous — it could read as "the request is ready to process" or "all
+    // servers are ready"):
+    //
+    //   Validated — did the request pass validation?
+    //     False, reason InvalidSpec | LocationNotFound | OCloudSiteConflict |
+    //       ResourcePoolConflict
+    //     True,  reason Completed
+    //     InvalidSpec is retained even though the webhook validates the same fields:
+    //     the controller must still handle bad input safely (e.g. a bmcAddress that
+    //     fails to parse before any dependent resource is created), and the webhook
+    //     can be bypassed or a check may be controller-only.
+    //
+    //   Onboarded — aggregated onboarding status across all servers.
+    //     False, reason InProgress | Failed
+    //     True,  reason Completed
+    //     The ONBOARDINGSTATE printer column surfaces this condition's reason
+    //     alongside the server counts for a quick overview.
     Conditions []metav1.Condition `json:"conditions,omitempty"`
+
     // Summary counts — updated by the OnboardingRequest controller on each reconciliation.
     // The controller lists OnboardingServer CRs in the resource pool namespace filtered by
     // spec.onboardingRequestName, and counts by status.state:
-    //   ServersTotal       = len(spec.servers)
-    //   ServersPending     = count where state == "Pending" or unset (an
-    //                        OnboardingServer created but not yet picked up —
-    //                        status is a subresource, so a freshly created CR
-    //                        has an empty state until its first reconcile),
-    //                        plus server entries for which no OnboardingServer
-    //                        CR exists yet
-    //   ServersInProgress  = count where state is non-terminal and not Pending
-    //                        (CreatingExternalSecrets, Inspecting, Inventorying,
-    //                         ApplyingHardwareProfile, PinningBmcAddress,
-    //                         UpdatingCredentials, ConfiguringLdap, Publishing,
-    //                         DisablingLocalAccounts)
-    //   ServersCompleted   = count where state == "Completed"
-    //   ServersFailed      = count where state in terminal failure states
-    //                        (VendorMismatch, AuthFailed, HwMismatch, Failed)
-    // Invariant: ServersPending + ServersInProgress + ServersCompleted +
-    //   ServersFailed == ServersTotal at all times (Pending absorbs both
+    //   TotalServerCount       = len(spec.servers)
+    //   PendingServerCount     = count where state == "Pending" or unset (an
+    //                            OnboardingServer created but not yet picked up —
+    //                            status is a subresource, so a freshly created CR
+    //                            has an empty state until its first reconcile),
+    //                            plus server entries for which no OnboardingServer
+    //                            CR exists yet
+    //   InProgressServerCount  = count where state is non-terminal and not Pending
+    //                            (CreatingExternalSecrets, Inspecting, Inventorying,
+    //                             ApplyingHardwareProfile, PinningBmcAddress,
+    //                             UpdatingCredentials, ConfiguringLdap, Publishing,
+    //                             DisablingLocalAccounts)
+    //   CompletedServerCount   = count where state == "Completed"
+    //   FailedServerCount      = count where state in terminal failure states
+    //                            (VendorMismatch, AuthFailed, HwMismatch, Failed)
+    // Invariant: PendingServerCount + InProgressServerCount + CompletedServerCount +
+    //   FailedServerCount == TotalServerCount at all times (Pending absorbs both
     //   not-yet-created and not-yet-started servers so the counts always add up).
     // The controller watches OnboardingServer CRs via an index on spec.onboardingRequestName
     // and re-reconciles the parent OnboardingRequest on any OnboardingServer state change.
-    ServersTotal       int `json:"serversTotal,omitempty"`
-    ServersPending     int `json:"serversPending,omitempty"`
-    ServersInProgress  int `json:"serversInProgress,omitempty"`
-    ServersCompleted   int `json:"serversCompleted,omitempty"`
-    ServersFailed      int `json:"serversFailed,omitempty"`
+    TotalServerCount      int `json:"totalServerCount,omitempty"`
+    PendingServerCount    int `json:"pendingServerCount,omitempty"`
+    InProgressServerCount int `json:"inProgressServerCount,omitempty"`
+    CompletedServerCount  int `json:"completedServerCount,omitempty"`
+    FailedServerCount     int `json:"failedServerCount,omitempty"`
 
     // Servers is a compact per-server summary, one entry per OnboardingServer,
     // refreshed by the controller on any child state change (it already watches
@@ -360,10 +380,11 @@ type OnboardingServerSummary struct {
 }
 ```
 
-**Printcolumns:** Total (`serversTotal`), Pending (`serversPending`), Completed
-(`serversCompleted`), In-Progress (`serversInProgress`), Failed (`serversFailed`),
-Age — the summary row shown by `oc get onboardingrequest` in the
-[Walkthrough](server-onboarding-implementation.md#10-walkthrough).
+**Printcolumns:** OnboardingState (the `Onboarded` condition's reason), Total
+(`totalServerCount`), Pending (`pendingServerCount`), In-Progress
+(`inProgressServerCount`), Completed (`completedServerCount`), Failed
+(`failedServerCount`), Age — the summary row shown by `oc get onboardingrequest`
+in the [Walkthrough](server-onboarding-implementation.md#10-walkthrough).
 
 **Validation (webhook or CEL rules):**
 
@@ -386,11 +407,6 @@ Age — the summary row shown by `oc get onboardingrequest` in the
   pre-mutation catch for mistyped or mis-provisioned addresses); this also fixes
   the address family the `PinningBmcAddress` pin uses (IPv4 vs IPv6 — see the
   [`PinningBmcAddress` state](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior))
-- `metadata.name` (the OnboardingRequest name, folded into the per-server
-  ExternalSecret/Secret names) must be short enough that
-  `<onboardingRequestName>-<serverName>-desired-creds` stays within the
-  253-character limit for any valid `bmcAddress` stem (see the length budget in
-  [OnboardingServer CR naming](#1-api-design-crds))
 - `resourcePoolName` must be unique across all OnboardingRequests — only one
   OnboardingRequest per resource pool. The validating webhook enforces this on a
   best-effort basis by listing existing OnboardingRequests, but a webhook cannot
@@ -398,7 +414,7 @@ Age — the summary row shown by `oc get onboardingrequest` in the
   same pool can pass admission simultaneously — a TOCTOU race). The
   OnboardingRequest controller therefore re-checks on reconciliation: if it finds
   another OnboardingRequest already owning the same `resourcePoolName`, the later
-  one (by `creationTimestamp`, then name) is set `Ready=False,
+  one (by `creationTimestamp`, then name) is set `Validated=False,
   Reason=ResourcePoolConflict` and does not create any resources
 - `authMode`, if set, must be `"local"` or `"ldap"` (defaults to `"local"` when empty)
 - When `authMode` is `"local"` (default), `desiredCredentialsVaultSecret` is required on every server entry
@@ -467,48 +483,39 @@ The webhook validates on update:
 4. New `bmcAddress` values do not duplicate existing entries.
 5. Updated `bmcSubnet`/`bmcGateway` still satisfy the CIDR/gateway/family rules, and every server's `bmcAddress` still falls within `bmcSubnet`.
 
-**OnboardingServer CR naming:** The CR name must be a deterministic, unique,
-RFC-1123-valid label derived from the BMC address. A naive "replace `.` and `:`
-with `-`" is **not** collision-free: `.` and `:` both map to `-` (so
-`10.10.10.101` and `10:10:10:101` would both become `10-10-10-101`), IPv6 allows
-uppercase hex (invalid in Kubernetes names), and compressed or leading/trailing
-`::` can yield leading/trailing hyphens (also invalid). The derivation therefore:
+**OnboardingServer CR naming:** The CR name is a **deterministic UUID** (UUIDv5)
+computed over a stable identity — the resource pool (equivalently the
+OnboardingRequest, one per pool) plus the server's **canonicalized** `bmcAddress`
+(RFC 5952 for IPv6, so equivalent spellings map to one UUID). This mirrors how
+Agent CRs are named, and sidesteps the pitfalls of deriving an RFC-1123 label from
+an IP — `.`/`:` collisions, IPv6 uppercase and `::` compression, trailing hyphens —
+**and the 253-character length budget entirely**: a UUID is always a fixed-length,
+valid label. It is deterministic, so a recreated OnboardingServer for the same
+server resolves to the **same** name (part of the idempotent re-onboarding
+guarantee). The derived names are:
 
-1. **Canonicalizes** the address — parse it and re-emit in canonical form
-   (RFC 5952 for IPv6: lowercase, fully compressed) so equivalent spellings map
-   to one name.
-2. **Builds a readable stem** by lowercasing and replacing `.`/`:` with `-`.
-3. **Prefixes the address family** (`v4-`/`v6-`) — this disambiguates IPv4 from
-   IPv6 and guarantees the name starts with an alphanumeric character.
-4. **Appends a short hash suffix** — the first 8 hex characters of a SHA-256 over
-   the canonical address (e.g. `-a1b2c3d4`). This guarantees uniqueness even when
-   the stem is truncated (see the length budget below), and avoids any
-   trailing-hyphen edge case.
+- OnboardingServer: `<uuid>`
+- BMH: `onboarded-<uuid>` (same UUID)
+- per-server credential Secret / ExternalSecret: `<uuid>-desired-creds`
 
-For example, `10.10.10.101` → `v4-10-10-10-101-<hash>` and `fd00:bmc::101` →
-`v6-fd00-bmc--101-<hash>`. The result is deterministic and unique within the
-resource pool namespace. (For brevity, the examples elsewhere in this document
-show only the readable stem, e.g. `10-10-10-101`, and omit the `v4-`/`v6-` prefix
-and hash suffix.)
+All are fixed-length and well within 253 characters regardless of
+`onboardingRequestName` length, so no length budget or request-name bound is
+needed.
 
-**Length budget.** The 253-character limit applies to every object the name
-seeds, not just the OnboardingServer CR — the same derived stem is also
-wrapped to name the BMH (`onboarded-<bmcAddress>`) and, most restrictively, the
-per-server ExternalSecret/Secret
-(`<onboardingRequestName>-<serverName>-desired-creds`). The
-stem is therefore truncated against the **longest** of these wrappers, not against
-253 directly: the budget for the stem is `253 − maxAffix`, where `maxAffix` sums
-**every** fixed part wrapped around the stem for the longest (per-server Secret)
-name — `len(onboardingRequestName) + 1` (the `-` join) + `len("v4-")` (the address-
-family prefix, 3) + `len("-<hash>")` (the `-` plus 8 hex chars, 9) +
-`len("-desired-creds")` (14) — so the prefix and hash that keep the name unique and
-valid are reserved, not just named. (For a request name of length _R_ that leaves a
-stem budget of `253 − (R + 1) − 3 − 9 − 14 = 226 − R` characters.)
-Because the per-server Secret name folds in `onboardingRequestName`, the webhook
-also bounds `onboardingRequestName` so that this composed name cannot exceed 253
-for any valid `bmcAddress` stem (a request name is normally short — a few tens of
-characters — so this bound is not restrictive in practice). This guarantees every
-name the service generates from a server entry stays within the limit.
+Because a UUID is opaque, the request name and BMC address are surfaced as
+**printer columns** (and `bmcAddress` is selectable) so the resource association
+stays legible:
+
+```text
+NAME                                   REQUEST              BMC ADDRESS     STATE
+2a773a0e-d230-5ee3-a94b-60d3448bd921   toronto-east-pool1   10.10.10.101    Completed
+```
+
+Clients filter by request via the `spec.onboardingRequestName` field — e.g.
+`oc get onboardingservers -n <pool> -o json | jq '.items[] | select(.spec.onboardingRequestName == "<name>")'`,
+or a field selector if one is registered. (For brevity, the examples elsewhere in
+this document still show a readable `onboarded-10-10-10-101`-style name in place of
+the UUID.)
 
 **Homogeneous resource pool assumption:**
 
@@ -676,19 +683,19 @@ When an OnboardingRequest is first reconciled, the controller ensures the
 inventory hierarchy exists. All three inventory CRs are created/looked up in the
 O-Cloud manager namespace (`oran-o2ims`):
 
-1. **Location CR** — must already exist in `oran-o2ims`. If not found, the OnboardingRequest is set to `Ready=False, Reason=LocationNotFound`.
+1. **Location CR** — must already exist in `oran-o2ims`. If not found, the OnboardingRequest is set to `Validated=False, Reason=LocationNotFound`.
 2. **OCloudSite CR** — created in `oran-o2ims` with `metadata.name` =
    `oCloudSiteName`, `spec.globalLocationName`, and the required `spec.description`
    (from `oCloudSiteDescription`, or a generated default) if not found. If it
    **already exists** but its `spec.globalLocationName` differs from the request's,
-   the OnboardingRequest is set to `Ready=False, Reason=OCloudSiteConflict` and no
+   the OnboardingRequest is set to `Validated=False, Reason=OCloudSiteConflict` and no
    ResourcePool is created — otherwise the pool and its hosts would be filed under a
    different Location than the request names.
 3. **ResourcePool CR** — created in `oran-o2ims` with `metadata.name` = `resourcePoolName`, `spec.oCloudSiteName`, and the required `spec.description` (from `resourcePoolDescription`, or a generated default) if not found.
 4. **Namespace** — created matching `resourcePoolName` if it does not exist, for BMH, Secret, and OnboardingServer resources. (Distinct from `oran-o2ims`.)
 5. **OnboardingServer CRs** — one created per entry in `spec.servers`, in the resource pool namespace, owned by the OnboardingRequest.
 
-If the ResourcePool already exists but references a different OCloudSite, the OnboardingRequest is set to `Ready=False, Reason=ResourcePoolConflict`. (The analogous parent check one level up — an existing OCloudSite pointing at a different Location — yields `OCloudSiteConflict`, per step 2.)
+If the ResourcePool already exists but references a different OCloudSite, the OnboardingRequest is set to `Validated=False, Reason=ResourcePoolConflict`. (The analogous parent check one level up — an existing OCloudSite pointing at a different Location — yields `OCloudSiteConflict`, per step 2.)
 
 When new servers are appended to the spec, the controller creates OnboardingServer CRs for the new entries on the next reconciliation.
 
@@ -856,7 +863,7 @@ type MutationOp struct {
 }
 ```
 
-**Printcolumns:** State, Vendor, BmcAddress, BMH, Age
+**Printcolumns:** Request (`spec.onboardingRequestName`), BmcAddress, State, Vendor, BMH, Age — the Request and BmcAddress columns keep the UUID-named CR legible (see [OnboardingServer CR naming](#1-api-design-crds))
 
 ### Deletion semantics
 
