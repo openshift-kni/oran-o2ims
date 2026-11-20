@@ -1017,6 +1017,7 @@ Kubernetes API group is likewise `onboarding.openshift.io`, not an `o2ims` group
 | `GET .../v1/onboardingRequests` | `List` OnboardingRequest | List all onboarding requests |
 | `POST .../v1/onboardingRequests` | `Create` OnboardingRequest | Create a request (drives onboarding of its servers) |
 | `GET .../v1/onboardingRequests/{onboardingRequestId}` | `Get` OnboardingRequest | Single request: summary counts plus the compact per-server list (name, state, message per server) |
+| `PATCH .../v1/onboardingRequests/{onboardingRequestId}` | `Patch` OnboardingRequest | Amend a request — the only mutations the spec allows: **append** entries to `spec.servers` and **correct** `bmcSubnet`/`bmcGateway` (the failed-pin recovery path). The webhook enforces immutability/append-only/field rules, so illegal edits are rejected regardless of interface (see [Spec mutability](#1-api-design-crds)) |
 | `DELETE .../v1/onboardingRequests/{onboardingRequestId}` | `Delete` OnboardingRequest | Tear down a request (subject to the finalizer / deletion guard — see [Deletion semantics](#deletion-semantics)) |
 
 `onboardingRequestId` is the OnboardingRequest CR name (cluster-scoped, so no
@@ -1043,12 +1044,15 @@ the OnboardingServer CR for `oc`-based inspection. Retrying a single failed serv
 likewise a cluster-side operation (`oc delete onboardingserver …`, see
 [Retrying a failed server](#retrying-a-failed-server)), not a REST call.
 
-`POST`/`DELETE` are conveniences that create/delete the very same OnboardingRequest
-CR an operator could `oc apply`/`oc delete`. The validating webhook
-([Controllers](server-onboarding-implementation.md#7-controllers)) and the finalizer are enforced by the API server on
-the CR write itself, so they apply identically no matter which interface
-originates the change — the REST facade gains deletion safety and immutability
-checks for free.
+`POST`/`PATCH`/`DELETE` are conveniences that create/amend/delete the very same
+OnboardingRequest CR an operator could `oc apply`/`oc patch`/`oc delete`. The
+validating webhook ([Controllers](server-onboarding-implementation.md#7-controllers))
+and the finalizer are enforced by the API server on the CR write itself, so they
+apply identically no matter which interface originates the change — the REST facade
+gains the append-only/immutability/deletion-safety checks for free. `PATCH` closes
+the asymmetry where a request could be created and deleted via REST but only
+_amended_ via `oc`; the mutable operations (append servers, correct
+`bmcSubnet`/`bmcGateway`) are now first-class in both interfaces.
 
 **Implementation.** Following the DB-free facade shape of `internal/service/artifacts`
 (read-only, `List`/`Get` only) and — for the write handlers and Kubernetes-error
@@ -1064,11 +1068,13 @@ type OnboardingServer struct {
 var _ api.StrictServerInterface = (*OnboardingServer)(nil)
 ```
 
-- Handlers call `HubClient.List/Get/Create/Delete` on the CRs and translate
+- Handlers call `HubClient.List/Get/Create/Patch/Delete` on the CRs and translate
   Kubernetes errors into O-RAN `ProblemDetails` responses — the same mapping
   `internal/service/provisioning` already uses: `IsNotFound` → `404`,
   `IsAlreadyExists` → `409`, `IsForbidden`/`IsBadRequest`/`IsInvalid` (API-server
-  and webhook validation) → `400`, otherwise `500`. (Artifacts is read-only, so it
+  and webhook validation, including a rejected illegal amend) → `400`, otherwise
+  `500`. The `Patch` handler applies the client-supplied partial update to the named
+  OnboardingRequest (a merge patch), letting the webhook arbitrate legality. (Artifacts is read-only, so it
   exercises only the `List`/`Get` path and produces `404` from an empty-result
   check rather than `IsNotFound`.)
 - CR ↔ API converters map the CRD types to the generated OpenAPI models — there
@@ -1104,10 +1110,11 @@ directly:
   follows the explicit-path style so each verb maps to a specific role.) Because
   `onboardingRequests` is the only public resource, the enumerated paths are just its
   collection/item paths: a read-only role receives the two `GET` paths; a privileged
-  onboarding role additionally receives `POST`/`DELETE` on `onboardingRequests`. That
-  privileged role is a **new** write-capable role modeled on the existing
-  `provisioner-role` / `subscriber-role` (which grant `create`/`delete`), **not** the
-  `deployer-role` (which is read-only on `deploymentManagers`). There are no
+  onboarding role additionally receives `POST`/`PATCH`/`DELETE` on
+  `onboardingRequests`. That privileged role is a **new** write-capable role modeled
+  on the existing `provisioner-role` / `subscriber-role` (which grant
+  `create`/`delete`), **not** the `deployer-role` (which is read-only on
+  `deploymentManagers`). There are no
   `onboardingServers` paths to grant. See the RBAC file list in
   [Project Structure](server-onboarding-implementation.md#8-project-structure-new-files).
 

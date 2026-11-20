@@ -381,7 +381,7 @@ RBAC required by DD-004.
   to the multi-service root command. No `db/` subtree. Add the REST-server
   container to the onboarding Deployment (OAuth issuer config + serving TLS cert).
 - RBAC: new `config/rbac/clusterrole_onboarding_server.yaml`
-  (`get,list,create,delete` on `onboardingrequests` only — no
+  (`get,list,create,patch,delete` on `onboardingrequests` only — no
   `onboardingservers`); `onboarding-server-subject-access-reviewer-binding` in
   `clusterrolebindings_services.yaml`; DD-004 updates to
   `oran_o2ims_user_roles.yaml` and `oran_o2ims_oauth_role_bindings.yaml`; and the
