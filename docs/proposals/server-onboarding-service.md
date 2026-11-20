@@ -29,9 +29,12 @@ These are forthcoming features; this proposal is written **against
 the capabilities they describe**, not a frozen API surface. The illustrative YAML
 below is subject to the final Metal3 API shapes.
 
-Hardware validation is performed by **creating the BareMetalHost with the shared
-default credentials and letting BMO run fast out-of-band (Redfish) inspection**
-(`spec.inspectionMode: fast`). The inspection results are checked against the
+Hardware validation is performed by **creating the BareMetalHost and letting BMO run
+fast out-of-band (Redfish) inspection** (`spec.inspectionMode: fast`). The BMH is
+created with each server's **provided credentials** in v1, or with the pool's **shared
+default credentials** in the credential-provisioning phase (then swapped to per-server)
+— see [Credentials: v1 vs credential provisioning](#2-server-onboarding-state-machine).
+The inspection results are checked against the
 pool's expected vendor and, if any are declared, its hardware attributes
 (`spec.hardwareAttributes` is optional — when omitted only the vendor check
 applies): on a match the server continues onboarding (credential provisioning,
@@ -916,20 +919,31 @@ administrator — restores the BMC.** It runs as the OnboardingServer finalizer
 whenever a server is removed from `spec.servers`, the request is deleted, or the
 OnboardingServer is deleted directly:
 
-1. **Set the de-onboard hold first, then re-check — a single coordination point
-   shared with the allocator.** Checking "not allocated" and then deleting is **not**
-   race-free on its own: an allocator that selected the host from an earlier snapshot
-   can commit its `AllocatedNode` after the check. So de-onboarding uses an explicit
-   **de-onboard hold** on the BMH (an `onboarding.openshift.io/deonboarding`
-   annotation) that the hardware manager's **allocation path honors at both selection
-   and commit** — the allocator refuses to create an `AllocatedNode` for a BMH
-   carrying it (the same place the inventory-hold guard is added). The finalizer
-   **(a)** sets the hold, **(b)** then re-checks allocation, and only proceeds if the
-   host is still **not allocated or provisioned** (no referencing AllocatedNode /
-   NodeAllocationRequest, not past `available`). Any allocation that committed in the
-   window is caught by the post-hold re-check; any that starts after the hold is
-   rejected by the allocator. (This is the same atomic hold-then-recheck the service
-   doc requires — see [Deletion semantics](#deletion-semantics).)
+1. **Claim the BMH for de-onboarding via a `resourceVersion`-guarded write that
+   serializes with allocation.** A plain "check not-allocated, then delete" — or even
+   "set a hold, then re-check" — is not race-free: the two are separate reads/writes,
+   so an allocator can pass its hold check, pause, and commit its claim after the
+   finalizer's re-check. The hold and the allocation claim must **serialize on a single
+   object**. Both sides write the **BMH** under an **optimistic-concurrency
+   (`resourceVersion`) precondition** — the same primitive used in
+   [ibi-server-pre-provisioning](ibi-server-pre-provisioning.md):
+   - **Allocator** (hardware manager): claiming a host is a `resourceVersion`-guarded
+     update to the BMH (its reservation marker / `AllocatedNode`-owner write). It first
+     rejects any BMH carrying the de-onboard hold; if its guarded write **conflicts**
+     (the BMH changed since it read it — e.g. the finalizer just set the hold), it
+     **retries from selection** and then skips the now-held host.
+   - **Finalizer**: sets the `onboarding.openshift.io/deonboarding` hold with a
+     `resourceVersion` precondition. If that write **conflicts** (an allocator just
+     claimed the host), it re-reads and treats the host as **in use** — a **reservation
+     counts as in use even before the `AllocatedNode` exists** — and backs off (step 2).
+     Only when the hold is written **and** no allocation/reservation is present does it
+     proceed.
+   Because both operations are `resourceVersion`-guarded writes to the same BMH, at
+   most one wins; the loser observes the conflict and re-evaluates. **Abandoned
+   reservations** (an allocator that set a reservation then crashed before creating the
+   `AllocatedNode`) are reclaimable after a bounded staleness timeout, so a crashed
+   allocation cannot block de-onboarding forever. (This serialization is required in
+   both docs — see [Deletion semantics](#deletion-semantics).)
 2. **Never tear down a host that is in use.** If the re-check in step 1 finds the BMH
    **allocated or provisioned**, cleanup is **blocked**: the finalizer clears the hold
    (so the host is not stranded), records that it is waiting, and requeues until the
@@ -1096,7 +1110,11 @@ var _ api.StrictServerInterface = (*OnboardingServer)(nil)
   separately patch `[A,B]` and `[A,C]` would otherwise have the second silently drop
   `B` — and dropping a completed, unallocated entry would **de-onboard** it. With the
   precondition, a stale update is rejected (`409`) and the client must re-read and
-  retry; the same applies to `oc` (use `--resource-version` / server-side apply).
+  retry. The same explicit precondition is required via `oc` — `oc replace` (which
+  sends the read `resourceVersion`) or `oc patch --resource-version=<rv>`. Server-side
+  apply is **not** a substitute: its field-ownership conflict detection does not
+  enforce a resource-version precondition, so a concurrent array replacement can still
+  be lost.
   (Artifacts is read-only, so it
   exercises only the `List`/`Get` path and produces `404` from an empty-result
   check rather than `IsNotFound`.)
@@ -1270,7 +1288,11 @@ the pool, in either of two equivalent ways:
 - **Direct delete (manual shortcut).** `oc delete onboardingserver -n <pool>
   <name>`. The entry is still in `spec.servers`, so the controller recreates it as
   `Pending` and re-onboards. The finalizer first cleans up the **held** BMH (never
-  published for a failed server) and restores the BMC, so the recreate starts clean.
+  published for a failed server) and restores the BMC; the recreate then starts clean
+  **unless the restore was only partial** — in that case the durable
+  `needs-bmc-reset` marker (below) holds the recreate until the operator resets the
+  BMC, since the OnboardingServer's own `cleanupStatus` is lost when the object is
+  deleted.
 
 The important change from a naive retry: **de-onboarding restores the BMC** (reverts
 the NIC pin, restores pool-default credentials, disables LDAP). So in the normal case
@@ -1280,14 +1302,18 @@ by the controller returning the BMC to the pool-default state before the retry, 
 than the operator doing an out-of-band reset.
 
 **Exception — partial restore.** BMC restore is best-effort: if it cannot complete it
-ends with `cleanupStatus: partial` and the BMC may **retain non-default credentials
-(or LDAP config)**. A retry then created with the pool-default credentials would fail
-at `AuthFailed`. So retry is **gated on `cleanupStatus`**: re-add (or recreate) only
-after de-onboarding reports `completed`. If it reports `partial`, the operator must
-first restore the BMC out of band (reset credentials / disable LDAP) to accept the
-provided credentials — the same manual action the `AuthFailed` guidance describes —
-then retry. The partial outcome and the attempted operation are recorded in
-`status.stateMessage` so the operator knows which restore step to finish.
+ends `partial` and the BMC may **retain non-default credentials (or LDAP config)**. A
+retry then created with the provided/default credentials would fail at `AuthFailed`.
+Because the `OnboardingServer`'s `cleanupStatus` is **lost when that object is
+deleted** (direct delete, or the de-onboard that removes it), the partial outcome must
+be recorded in **durable state on the OnboardingRequest** — which outlives the
+OnboardingServer — as a per-server **`onboarding.openshift.io/needs-bmc-reset`** marker
+(keyed by `bmcAddress`, carrying the attempted restore step). While that marker is set,
+the desired-set controller **does not auto-recreate or retry** the server: it holds it
+in a `Blocked`/`NeedsBmcReset` state and waits. The operator resets the BMC out of band
+(reset credentials / disable LDAP — the same action the `AuthFailed` guidance
+describes) and **clears the marker** to confirm; only then does onboarding retry. This
+keeps a partial restore from silently looping into `AuthFailed`.
 
 Fix the root cause first — bad default-credentials/vault entry (`AuthFailed`), wrong
 hardware model (`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity

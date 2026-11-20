@@ -50,9 +50,12 @@ from the external vault. The controller gates the transition to `Inspecting` on
 **ESO's sync status, not the Secret contents**: it watches each ExternalSecret's
 `.status` (the `Ready` / `SecretSynced` condition ESO sets) and never reads the
 synced Secret's `data`, so no BMC credential bytes ever enter the controller
-process. At minimum the shared default-credentials ExternalSecret must be synced,
+process. At minimum the ExternalSecret the BMH will reference must be synced — in v1
+the server's **per-server** credentials Secret, and in the credential-provisioning
+phase the **shared default-credentials** Secret (see
+[Credentials: v1 vs credential provisioning](server-onboarding-service.md#2-server-onboarding-state-machine)) —
 since the BMH created in `Inspecting` references the resulting Secret via
-`spec.bmc.credentialsName` — and **BMO, not the controller, reads it**.
+`spec.bmc.credentialsName`, and **BMO, not the controller, reads it**.
 
 > **New external integration.** The codebase has no ESO integration today — no
 > ESO API types are vendored, registered in any scheme, or referenced by any
@@ -70,12 +73,16 @@ since the BMH created in `Inspecting` references the resulting Secret via
 
 **`Inspecting` state:**
 
-`Inspecting` is where the BMH is first created — with the pool's **shared default
-credentials**, fast out-of-band inspection (`spec.inspectionMode: fast`), and the
-**inventory-hold marker** (`onboarding.openshift.io/inventory-hold: "true"`).
-Creating the BMH is what performs authentication: BMO registers the host against
-the BMC using the default credentials and then runs out-of-band (Redfish)
-inspection to gather its hardware.
+`Inspecting` is where the BMH is first created — with fast out-of-band inspection
+(`spec.inspectionMode: fast`) and the **inventory-hold marker**
+(`onboarding.openshift.io/inventory-hold: "true"`). The credentials it is created with
+are **phase-dependent**: in **v1**, each server's **provided credentials** (used as-is,
+since there is no later swap); in the **credential-provisioning phase**, the pool's
+**shared default credentials** (swapped to per-server at `UpdatingCredentials`) — see
+[Credentials: v1 vs credential provisioning](server-onboarding-service.md#2-server-onboarding-state-machine).
+Creating the BMH is what performs authentication: BMO registers the host against the
+BMC with those credentials and then runs out-of-band (Redfish) inspection to gather
+its hardware.
 
 1. Create the BMH (see
    [Hardware Inventory and BMH Creation](#6-hardware-inventory-and-bmh-creation)
@@ -400,17 +407,18 @@ orphan its per-server resources. On finalization the controller:
      [Deleting a Completed server](server-onboarding-service.md#deleting-a-completed-server-idempotent-re-onboarding)).
    - **De-onboard** — the entry has been **removed** from `spec.servers`, or the
      OnboardingRequest is being deleted: tear the server down, **including a published
-     BMH** — but race-free against allocation. **(a)** Set the de-onboard hold
-     (`onboarding.openshift.io/deonboarding`) on the BMH; the hardware manager's
-     allocation path rejects a BMH carrying it at **both selection and
-     `AllocatedNode` commit** (the same hook as the inventory-hold guard). **(b)**
-     Then **re-check** allocation: if the BMH is allocated or provisioned (a
-     referencing AllocatedNode / NodeAllocationRequest, or past `available`), **clear
-     the hold**, record that cleanup is blocked, and requeue until the host is
-     deprovisioned back to the pool — then retry from (a). An allocation that
-     committed in the check-to-hold window is caught by this post-hold re-check; one
-     that starts after the hold is rejected by the allocator. Only once the re-check
-     passes does cleanup proceed.
+     BMH** — serialized against allocation via a **`resourceVersion`-guarded write to
+     the BMH** (not a plain check-then-act). **(a)** Set the de-onboard hold
+     (`onboarding.openshift.io/deonboarding`) with a `resourceVersion` precondition; if
+     it **conflicts** (an allocator just claimed the host), re-read and treat the host
+     as in use. The allocator's claim is likewise a `resourceVersion`-guarded BMH write
+     that rejects a held BMH at **selection and `AllocatedNode` commit** and retries
+     from selection on conflict — so at most one of {hold, claim} wins. **(b)** With
+     the hold set, proceed only if there is **no allocation or reservation** (a
+     reservation counts as in use even before the `AllocatedNode` exists); otherwise
+     **clear the hold**, record blocked, and requeue until the host is deprovisioned,
+     then retry from (a). Abandoned reservations are reclaimable after a staleness
+     timeout. See [Deletion semantics](server-onboarding-service.md#deletion-semantics).
    - **Retry-cleanup** — the entry is still desired but the BMH is **held** (failed
      before `Publishing`): clean it up so the recreate starts fresh.
 
@@ -667,9 +675,12 @@ provisioning network.
       marker**. It keeps the host out of the O2 IMS inventory for the entire
       onboarding process; it is removed only at `Publishing` (see below).
   - `spec.bmc.address`: from `bmcAddressTemplate` with the server's `bmcAddress`
-  - `spec.bmc.credentialsName`: reference to the **shared default-credentials**
-    Secret (`<onboardingRequestName>-default-creds`). This is swapped to the
-    per-server (local) or LDAP Secret later, after the BMC is mutated.
+  - `spec.bmc.credentialsName`: **phase-dependent** (see the §6 intro and
+    [Credentials: v1 vs credential provisioning](server-onboarding-service.md#2-server-onboarding-state-machine)).
+    In **v1**, the server's per-server Secret (`<uuid>-desired-creds`), used as-is. In
+    the **credential-provisioning phase**, the **shared default-credentials** Secret
+    (`<onboardingRequestName>-default-creds`), swapped to the per-server (local) or
+    LDAP Secret later, after the BMC is mutated.
   - `spec.bmc.disableCertificateVerification`: **`false` by default** — BMO verifies
     the BMC's serving certificate. It is set to `true` **only** when the pool opts in
     via `spec.disableBmcCertificateVerification` (self-signed BMCs with no trusted CA)
@@ -1090,9 +1101,10 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
 - `internal/constants/constants.go` — add onboarding constants (including the
   `onboarding.openshift.io/inventory-hold`,
   `onboarding.openshift.io/hardening-complete`,
-  `onboarding.openshift.io/hardening-failed`, and
-  `onboarding.openshift.io/deonboarding` annotation keys and the server
-  subcommand name)
+  `onboarding.openshift.io/hardening-failed`,
+  `onboarding.openshift.io/deonboarding`, and the per-server
+  `onboarding.openshift.io/needs-bmc-reset` marker (on the OnboardingRequest)
+  annotation keys and the server subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
   must exclude BMHs carrying the inventory-hold marker (see
   [Inventory-hold marker and `IncludeInInventory`](#inventory-hold-marker-and-includeininventory))
