@@ -104,12 +104,8 @@ func runSeedGenerationSSHCommandAtAddress(ctx context.Context, address string, u
 		connection.Close()
 		return nil, fmt.Errorf("failed to set SSH upload deadline")
 	}
-	hostKeyAlgorithms, err := seedGenerationSSHHostKeyAlgorithms(
+	hostKeyAlgorithms := seedGenerationSSHHostKeyAlgorithms(
 		knownHostsBytes, address, connection.RemoteAddr(), knownHostCallback)
-	if err != nil {
-		connection.Close()
-		return nil, fmt.Errorf("known_hosts data for SSH is invalid")
-	}
 	clientConfig := &ssh.ClientConfig{
 		User: username, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: knownHostCallback, HostKeyAlgorithms: hostKeyAlgorithms,
@@ -162,7 +158,7 @@ func runSeedGenerationSSHCommandAtAddress(ctx context.Context, address string, u
 // an unpinned key even when the pinned one is available.
 func seedGenerationSSHHostKeyAlgorithms(
 	data []byte, address string, remote net.Addr, verify ssh.HostKeyCallback,
-) ([]string, error) {
+) []string {
 	var algorithms []string
 	seen := make(map[string]bool)
 	add := func(algorithm string) {
@@ -173,13 +169,15 @@ func seedGenerationSSHHostKeyAlgorithms(
 	}
 	for len(data) > 0 {
 		marker, _, key, _, rest, err := ssh.ParseKnownHosts(data)
+		data = rest
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("parse SSH known_hosts entry: %w", err)
+			// Match knownhosts.New: ignore unsupported or malformed entries.
+			// The callback still verifies the server against the supported keys.
+			continue
 		}
-		data = rest
 		// Reuse knownhosts matching for hashed names, wildcard patterns, and revocations.
 		if marker != "" || verify(address, remote, key) != nil {
 			continue
@@ -194,7 +192,7 @@ func seedGenerationSSHHostKeyAlgorithms(
 	}
 	// An empty list preserves Go's defaults for certificate-authority-only
 	// known_hosts files; the callback still verifies the presented certificate.
-	return algorithms, nil
+	return algorithms
 }
 
 type seedGenerationSSHOutput struct{ buffer bytes.Buffer }

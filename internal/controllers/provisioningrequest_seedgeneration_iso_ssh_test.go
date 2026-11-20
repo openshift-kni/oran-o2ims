@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,6 +45,15 @@ func newISOTestSSHKey(t *testing.T) (ssh.Signer, []byte) {
 		t.Fatal(err)
 	}
 	return signer, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: encoded})
+}
+
+func isoTestSSHUnsupportedHostEntry(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/seedgeneration-dsa-known-hosts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(data))
 }
 
 func TestSeedGenerationSSHCommandChecksHostAndAuthentication(t *testing.T) {
@@ -131,24 +141,39 @@ func TestSeedGenerationSSHCommandChecksHostAndAuthentication(t *testing.T) {
 	}()
 	t.Cleanup(func() { _ = listener.Close(); <-stopped })
 	address := listener.Addr().String()
+	pin := func(signer ssh.Signer) string {
+		return knownhosts.Line([]string{address}, signer.PublicKey()) + "\n"
+	}
+	unsupportedEntry := isoTestSSHUnsupportedHostEntry(t)
+	revokedEntries := "@revoked " + pin(host) + "@revoked " + pin(ecdsaHost) + "@revoked " + pin(rsaHost)
 	for _, tc := range []struct {
-		name    string
-		host    ssh.Signer
-		key     []byte
-		command string
-		want    bool
-		wantErr string
+		name       string
+		knownHosts string
+		key        []byte
+		command    string
+		want       bool
+		wantErr    string
 	}{
-		{"valid ED25519 pin", host, private, "check", true, ""},
-		{"valid ECDSA pin", ecdsaHost, private, "check", true, ""},
-		{"valid RSA pin", rsaHost, private, "check", true, ""},
-		{"wrong host key", wrongHost, private, "check", false, "SSH host key does not match known_hosts"},
-		{"wrong user key", host, wrongKey, "check", false, "SSH handshake or authentication failed"},
-		{"invalid key", host, []byte("invalid-private-key"), "check", false, "upload private key is invalid"},
-		{"remote operation failed", host, private, "fail", false, "SSH filesystem operation"},
+		{"valid ED25519 pin", pin(host), private, "check", true, ""},
+		{"valid ECDSA pin", pin(ecdsaHost), private, "check", true, ""},
+		{"valid RSA pin", pin(rsaHost), private, "check", true, ""},
+		{"wrong host key", pin(wrongHost), private, "check", false, "SSH host key does not match known_hosts"},
+		{"wrong user key", pin(host), wrongKey, "check", false, "SSH handshake or authentication failed"},
+		{"invalid key", pin(host), []byte("invalid-private-key"), "check", false, "upload private key is invalid"},
+		{"remote operation failed", pin(host), private, "fail", false, "SSH filesystem operation"},
+		{"unsupported entry before pin", unsupportedEntry + "\n" + pin(host), private, "check", true, ""},
+		{"unsupported entry after pin", pin(host) + unsupportedEntry + "\n", private, "check", true, ""},
+		{"unsupported entry before pin without final newline", unsupportedEntry + "\n" + strings.TrimSuffix(pin(host), "\n"), private, "check", true, ""},
+		{"unsupported entry after pin without final newline", pin(host) + unsupportedEntry, private, "check", true, ""},
+		{"malformed entry before pin", "invalid entry\n" + pin(host), private, "check", true, ""},
+		{"unsupported entry only", unsupportedEntry, private, "check", false, "known_hosts data for SSH is invalid"},
+		{"malformed entry only", "invalid entry\n", private, "check", false, "known_hosts data for SSH is invalid"},
+		{"unsupported entry with unpinned host", unsupportedEntry + "\n" + knownhosts.Line([]string{"other.example.com"}, host.PublicKey()), private, "check", false, "SSH host key is not pinned"},
+		{"unsupported entry with mismatched pin", unsupportedEntry + "\n" + pin(wrongHost), private, "check", false, "SSH host key does not match known_hosts"},
+		{"unsupported entry with revoked keys", unsupportedEntry + "\n" + pin(host) + revokedEntries, private, "check", false, "SSH host key is revoked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			data := map[string][]byte{"username": []byte("uploader"), "privateKey": tc.key, "knownHosts": []byte(knownhosts.Line([]string{address}, tc.host.PublicKey()) + "\n")}
+			data := map[string][]byte{"username": []byte("uploader"), "privateKey": tc.key, "knownHosts": []byte(tc.knownHosts)}
 			output, err := runSeedGenerationSSHCommandAtAddress(context.Background(), address, data, tc.command)
 			if tc.want {
 				if err != nil || string(output) != "checked" {
@@ -178,6 +203,51 @@ func TestSeedGenerationSSHCommandChecksHostAndAuthentication(t *testing.T) {
 			t.Fatalf("SSH check with hashed host pin failed: %s %v", output, err)
 		}
 	})
+}
+
+func TestSeedGenerationSSHHostKeyAlgorithmsPreservesCertificateAuthorities(t *testing.T) {
+	const address = "upload.example.test:22"
+	remote := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}
+	authority, _ := newISOTestSSHKey(t)
+	host, _ := newISOTestSSHKey(t)
+	certificate := &ssh.Certificate{
+		Key:             host.PublicKey(),
+		CertType:        ssh.HostCert,
+		ValidPrincipals: []string{"upload.example.test"},
+		ValidBefore:     ssh.CertTimeInfinity,
+	}
+	if err := certificate.SignCert(rand.Reader, authority); err != nil {
+		t.Fatal(err)
+	}
+	caEntry := "@cert-authority " + knownhosts.Line([]string{address}, authority.PublicKey())
+	unsupportedEntry := isoTestSSHUnsupportedHostEntry(t)
+	for _, tc := range []struct{ name, knownHosts string }{
+		{"authority only", caEntry},
+		{"unsupported entry before authority", unsupportedEntry + "\n" + caEntry},
+		{"unsupported entry after authority", caEntry + "\n" + unsupportedEntry},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := []byte(tc.knownHosts)
+			knownHostsPath := filepath.Join(t.TempDir(), "known_hosts")
+			if err := os.WriteFile(knownHostsPath, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			verify, err := knownhosts.New(knownHostsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			algorithms := seedGenerationSSHHostKeyAlgorithms(data, address, remote, verify)
+			if len(algorithms) != 0 {
+				t.Fatalf("certificate authorities must preserve default algorithms, got %v", algorithms)
+			}
+			if err := verify(address, remote, certificate); err != nil {
+				t.Fatalf("trusted host certificate was rejected: %v", err)
+			}
+			if err := verify(address, remote, host.PublicKey()); err == nil {
+				t.Fatal("certificate authority accepted an unpinned plain host key")
+			}
+		})
+	}
 }
 
 func TestSeedGenerationSSHCommandReportsTempDirectoryFailure(t *testing.T) {
