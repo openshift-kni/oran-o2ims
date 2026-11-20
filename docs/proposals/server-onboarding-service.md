@@ -916,15 +916,26 @@ administrator — restores the BMC.** It runs as the OnboardingServer finalizer
 whenever a server is removed from `spec.servers`, the request is deleted, or the
 OnboardingServer is deleted directly:
 
-1. **Never tear down a host that is in use.** If the BMH is **allocated or
-   provisioned** (referenced by an AllocatedNode / NodeAllocationRequest, or past the
-   `available` state), cleanup is **blocked**: the finalizer records that it is
-   waiting and requeues until the host is returned to the pool through the normal
-   provisioning workflow (deprovision the cluster using it; the hardware manager
-   deallocates it back to `available`).
-2. **Prevent new allocation.** Once de-onboarding starts, the host is excluded from
-   allocation selection (the same inventory-hold-style guard used during onboarding),
-   so a ProvisioningRequest cannot grab it mid-teardown.
+1. **Set the de-onboard hold first, then re-check — a single coordination point
+   shared with the allocator.** Checking "not allocated" and then deleting is **not**
+   race-free on its own: an allocator that selected the host from an earlier snapshot
+   can commit its `AllocatedNode` after the check. So de-onboarding uses an explicit
+   **de-onboard hold** on the BMH (an `onboarding.openshift.io/deonboarding`
+   annotation) that the hardware manager's **allocation path honors at both selection
+   and commit** — the allocator refuses to create an `AllocatedNode` for a BMH
+   carrying it (the same place the inventory-hold guard is added). The finalizer
+   **(a)** sets the hold, **(b)** then re-checks allocation, and only proceeds if the
+   host is still **not allocated or provisioned** (no referencing AllocatedNode /
+   NodeAllocationRequest, not past `available`). Any allocation that committed in the
+   window is caught by the post-hold re-check; any that starts after the hold is
+   rejected by the allocator. (This is the same atomic hold-then-recheck the service
+   doc requires — see [Deletion semantics](#deletion-semantics).)
+2. **Never tear down a host that is in use.** If the re-check in step 1 finds the BMH
+   **allocated or provisioned**, cleanup is **blocked**: the finalizer clears the hold
+   (so the host is not stranded), records that it is waiting, and requeues until the
+   host is returned to the pool through the normal provisioning workflow (deprovision
+   the cluster; the hardware manager deallocates it back to `available`), then retries
+   from step 1.
 3. **Wait for any in-flight BMC operation to settle, then restore the BMC**
    best-effort via the Metal3 APIs — revert the NIC pin to DHCP, restore the
    pool-default credentials, and (LDAP mode) disable LDAP / re-enable local auth — so
@@ -1079,7 +1090,14 @@ var _ api.StrictServerInterface = (*OnboardingServer)(nil)
   `IsAlreadyExists` → `409`, `IsForbidden`/`IsBadRequest`/`IsInvalid` (API-server
   and webhook validation, including a rejected illegal amend) → `400`, otherwise
   `500`. The `Patch` handler applies the client-supplied partial update to the named
-  OnboardingRequest (a merge patch), letting the webhook arbitrate legality. (Artifacts is read-only, so it
+  OnboardingRequest, letting the webhook arbitrate legality. It **requires optimistic
+  concurrency** (a `resourceVersion` precondition) for any change to `spec.servers`:
+  a merge patch replaces the whole array, so two clients that both read `[A]` and
+  separately patch `[A,B]` and `[A,C]` would otherwise have the second silently drop
+  `B` — and dropping a completed, unallocated entry would **de-onboard** it. With the
+  precondition, a stale update is rejected (`409`) and the client must re-read and
+  retry; the same applies to `oc` (use `--resource-version` / server-side apply).
+  (Artifacts is read-only, so it
   exercises only the `List`/`Get` path and produces `404` from an empty-result
   check rather than `IsNotFound`.)
 - CR ↔ API converters map the CRD types to the generated OpenAPI models — there
@@ -1173,8 +1191,11 @@ CreatingExternalSecrets
     │
     ▼
 Inspecting ──► AuthFailed (terminal)
-    │          (BMO cannot register/authenticate with default creds)
-    │  Create BMH: default creds, inspectionMode: fast, inventory-hold marker.
+    │          (BMO cannot register/authenticate with the BMH's credentials)
+    │  Create BMH: inspectionMode: fast, inventory-hold marker. Credentials: in
+    │  v1 the server's provided credentials; in the credential-provisioning phase
+    │  the shared default credentials (then swapped at UpdatingCredentials). See
+    │  "Credentials: v1 vs credential provisioning" below.
     │  BMO runs out-of-band (Redfish) inspection — no ramdisk boot — and
     │  produces HardwareData in seconds.
     ▼
@@ -1214,6 +1235,20 @@ ends at Completed.
 On VendorMismatch / HwMismatch the controller deletes the (still-held) BMH.
 ```
 
+**Credentials: v1 vs credential provisioning.** The diagram above shows the full
+(post-v1) flow, in which the BMH is created in `Inspecting` with the pool's **shared
+default credentials** and switched to per-server credentials at `UpdatingCredentials`
+(the credential-provisioning phase). **In v1 there is no `UpdatingCredentials` state**,
+so the BMH is created and inspected with **each server's own provided credentials**
+(`servers[].desiredCredentialsVaultSecret`, used as-is — the credentials the BMC
+already has), and no swap occurs. The shared `defaultCredentialsVaultSecret` and the
+default→per-server swap belong to the credential-provisioning phase; until it lands, a
+BMC whose current credentials the operator does not supply per server fails at
+`AuthFailed` in `Inspecting`. (A homogeneous pool whose BMCs still carry factory
+defaults can point every `desiredCredentialsVaultSecret` at the one shared default
+entry.) The `Inspecting`/BMH-creation description in the implementation companion
+reflects both cases.
+
 The detailed, per-state behavior — what the controller does in each state above,
 including `CreatingExternalSecrets`, `Inspecting`, `Inventorying`,
 `ApplyingHardwareProfile`, `PinningBmcAddress`, the credential/LDAP states,
@@ -1238,15 +1273,27 @@ the pool, in either of two equivalent ways:
   published for a failed server) and restores the BMC, so the recreate starts clean.
 
 The important change from a naive retry: **de-onboarding restores the BMC** (reverts
-the NIC pin, restores pool-default credentials, disables LDAP). So there is **no
-longer a "post-mutation failure needs a manual BMC reset" case** — even a `Failed`
-reached during/after `UpdatingCredentials` or `ConfiguringLdap` is recovered by the
-controller returning the BMC to the pool-default state before the retry, rather than
-the operator doing an out-of-band reset. Fix the root cause first — bad
-default-credentials/vault entry (`AuthFailed`), wrong hardware model
-(`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity (`Failed`). (A `Failed`
-in `ApplyingHardwareProfile` may have already flashed firmware/BIOS; that hardware
-state is a baseline the recreated run simply re-applies, so it converges regardless.)
+the NIC pin, restores pool-default credentials, disables LDAP). So in the normal case
+there is **no "post-mutation failure needs a manual BMC reset" step** — even a
+`Failed` reached during/after `UpdatingCredentials` or `ConfiguringLdap` is recovered
+by the controller returning the BMC to the pool-default state before the retry, rather
+than the operator doing an out-of-band reset.
+
+**Exception — partial restore.** BMC restore is best-effort: if it cannot complete it
+ends with `cleanupStatus: partial` and the BMC may **retain non-default credentials
+(or LDAP config)**. A retry then created with the pool-default credentials would fail
+at `AuthFailed`. So retry is **gated on `cleanupStatus`**: re-add (or recreate) only
+after de-onboarding reports `completed`. If it reports `partial`, the operator must
+first restore the BMC out of band (reset credentials / disable LDAP) to accept the
+provided credentials — the same manual action the `AuthFailed` guidance describes —
+then retry. The partial outcome and the attempted operation are recorded in
+`status.stateMessage` so the operator knows which restore step to finish.
+
+Fix the root cause first — bad default-credentials/vault entry (`AuthFailed`), wrong
+hardware model (`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity
+(`Failed`). (A `Failed` in `ApplyingHardwareProfile` may have already flashed
+firmware/BIOS; that hardware state is a baseline the recreated run simply re-applies,
+so it converges regardless.)
 
 ### Deleting a Completed server (idempotent re-onboarding)
 

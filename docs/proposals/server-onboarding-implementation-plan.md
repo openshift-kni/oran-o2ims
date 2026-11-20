@@ -249,9 +249,13 @@ controller for live-cluster validation.
   `ConfiguringLdap`, and `DisablingLocalAccounts` are added in later phases; v1
   admission rejects `hardwareProfileName` and `authMode: ldap` until then.
 - Finalizer cleanup: delete a held BMH and per-server ExternalSecret/Secret on
-  delete; **retain** a published BMH and its credentials; the request finalizer
-  sweeps remaining credentials on teardown; `status.cleanupStatus`; retry-by-delete
-  recreates the server as `Pending`. (Managed explicitly, not via owner-reference
+  delete; **retain** a published BMH and its credentials **only while the server
+  stays in `spec.servers`**; on **de-onboard** (entry removed or request deleted),
+  delete the published BMH too once it is **not allocated/provisioned** (v1 has no
+  BMC mutation, so there is no BMC restore yet — that arrives with the
+  pinning/credential phases); the request finalizer sweeps remaining credentials on
+  teardown; `status.cleanupStatus`; retry-by-delete recreates the server as
+  `Pending`. (Managed explicitly, not via owner-reference
   GC — see
   [Cleanup mechanism](server-onboarding-implementation.md#server-onboarding-state-machine--detailed-per-state-behavior).)
 - **Register the controller in `main.go`** with its RBAC.

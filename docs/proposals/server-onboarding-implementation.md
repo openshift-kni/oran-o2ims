@@ -400,11 +400,17 @@ orphan its per-server resources. On finalization the controller:
      [Deleting a Completed server](server-onboarding-service.md#deleting-a-completed-server-idempotent-re-onboarding)).
    - **De-onboard** — the entry has been **removed** from `spec.servers`, or the
      OnboardingRequest is being deleted: tear the server down, **including a published
-     BMH**. First **refuse while in use**: if the BMH is allocated or provisioned (a
-     referencing AllocatedNode / NodeAllocationRequest, or past `available`), record
-     that cleanup is blocked and requeue until the host is deprovisioned back to the
-     pool through the normal provisioning workflow. Also exclude it from allocation
-     selection so it cannot be grabbed mid-teardown.
+     BMH** — but race-free against allocation. **(a)** Set the de-onboard hold
+     (`onboarding.openshift.io/deonboarding`) on the BMH; the hardware manager's
+     allocation path rejects a BMH carrying it at **both selection and
+     `AllocatedNode` commit** (the same hook as the inventory-hold guard). **(b)**
+     Then **re-check** allocation: if the BMH is allocated or provisioned (a
+     referencing AllocatedNode / NodeAllocationRequest, or past `available`), **clear
+     the hold**, record that cleanup is blocked, and requeue until the host is
+     deprovisioned back to the pool — then retry from (a). An allocation that
+     committed in the check-to-hold window is caught by this post-hold re-check; one
+     that starts after the hold is rejected by the allocator. Only once the re-check
+     passes does cleanup proceed.
    - **Retry-cleanup** — the entry is still desired but the BMH is **held** (failed
      before `Publishing`): clean it up so the recreate starts fresh.
 
@@ -415,9 +421,19 @@ orphan its per-server resources. On finalization the controller:
    cannot assume the OnboardingRequest finalizer's drain ran, because under
    _foreground_ garbage collection Kubernetes can begin child finalization before the
    parent finishes draining (and a lone `oc delete onboardingserver` has no parent
-   drain at all). If `status.mutationProgress` shows an operation at `Requested` with
-   no terminal `Applied`/`Failed` outcome yet, the finalizer blocks and requeues until
-   BMO reports it settled — a rollback issued against an in-flight op would race.
+   drain at all). For an operation at `Requested` with no terminal `Applied`/`Failed`
+   outcome yet, the finalizer distinguishes **submitted** from **not-submitted** by
+   checking whether the desired state was actually written to the BMH / companion CR
+   (`Requested` is recorded around that write, so a crash in between can leave
+   `Requested` with nothing for BMO to act on):
+   - **Submitted** (desired state present): block and requeue until BMO reports it
+     settled — a rollback issued against an in-flight op would race.
+   - **Not submitted** (desired state absent, e.g. a crash between recording
+     `Requested` and writing it): treat it as a no-op and **cancel** it (mark
+     `RolledBack`/skipped) rather than waiting indefinitely — there is nothing for BMO
+     to complete. (Equivalently, the controller re-asserts the desired state on
+     recovery so it becomes genuinely submitted; either way the finalizer never waits
+     forever on a phantom operation.)
 4. **Restores the BMC, then deletes the BMH.** Selects what to revert from
    **`status.mutationProgress`** (not `status.state`, which may be `Failed`): a
    reversible op is reverted whenever it reached **`Requested`, `Applied`, or
@@ -630,12 +646,20 @@ place of the UUID.
 
 When a server reaches `Inspecting`, resources are created in the **resource pool
 namespace** (namespace name = `resourcePoolName` from the onboarding request). The
-namespace is created if it does not already exist. The BMH is created with the
-pool's **shared default credentials** and `spec.inspectionMode: fast` so BMO runs
-a fast out-of-band (Redfish) hardware inspection against the BMC. Only two
-resources are created per server here: the BMH and its (ESO-synced) BMC credential
-Secret — there is **no Network Data Secret**, because out-of-band inspection never
-boots the host over a provisioning network.
+namespace is created if it does not already exist.
+
+**Which credentials the BMH is created with depends on the phase** (see
+[Credentials: v1 vs credential provisioning](server-onboarding-service.md#2-server-onboarding-state-machine)):
+in **v1** (no `UpdatingCredentials` state) the BMH references **each server's own
+provided credentials** (`desiredCredentialsVaultSecret`, used as-is), since there is
+no later swap; in the **credential-provisioning phase** it references the pool's
+**shared default credentials** and is swapped to per-server at `UpdatingCredentials`.
+The YAML below shows the credential-provisioning (shared-default) form; for v1
+substitute the per-server Secret in `spec.bmc.credentialsName`. Either way BMO runs
+the fast out-of-band (Redfish) inspection, and only two resources are created per
+server here: the BMH and its (ESO-synced) BMC credential Secret — there is **no
+Network Data Secret**, because out-of-band inspection never boots the host over a
+provisioning network.
 
 - **BareMetalHost CR** (`onboarded-<bmcAddress>`) with:
   - Annotations:
@@ -1065,16 +1089,21 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   inspection
 - `internal/constants/constants.go` — add onboarding constants (including the
   `onboarding.openshift.io/inventory-hold`,
-  `onboarding.openshift.io/hardening-complete`, and
-  `onboarding.openshift.io/hardening-failed` annotation keys and the server
+  `onboarding.openshift.io/hardening-complete`,
+  `onboarding.openshift.io/hardening-failed`, and
+  `onboarding.openshift.io/deonboarding` annotation keys and the server
   subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
   must exclude BMHs carrying the inventory-hold marker (see
   [Inventory-hold marker and `IncludeInInventory`](#inventory-hold-marker-and-includeininventory))
-- `internal/hardwaremanager/controller/` allocation selection (`fetchBMHList` /
-  `ResourceSelectionSecondaryFilter`) — must likewise exclude held BMHs so a
-  mid-onboarding host is never allocated before `Publishing` (same
-  [inventory-hold](#inventory-hold-marker-and-includeininventory) guard)
+- `internal/hardwaremanager/controller/` allocation path (`fetchBMHList` /
+  `ResourceSelectionSecondaryFilter` **and the `AllocatedNode` commit**) — must
+  reject a BMH carrying either the **inventory-hold** marker (mid-onboarding, not yet
+  published) or the **de-onboarding** hold (`onboarding.openshift.io/deonboarding`),
+  at both selection and commit, so a host is never allocated before `Publishing` or
+  while it is being torn down (the commit-time check is what makes de-onboarding's
+  hold-then-recheck race-free — see
+  [Deletion semantics](server-onboarding-service.md#deletion-semantics))
 - `config/crd/` — generated CRD manifests
 - `config/rbac/` — RBAC for the onboarding service account, plus the user-facing
   role updates required by DD-004:
