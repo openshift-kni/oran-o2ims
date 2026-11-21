@@ -232,6 +232,13 @@ type OnboardingRequestSpec struct {
     // Optional. See "BMH creation".
     BootInterfaceSelector *BootInterfaceSelector `json:"bootInterfaceSelector,omitempty"`
 
+    // OnboardingTimeout bounds how long a single server may take to reach Completed.
+    // Transient errors are retried with backoff (no fixed retry-count budget); if a
+    // server has not completed within this duration (from status.onboardingStartedAt)
+    // it goes terminal Failed with reason OnboardingTimeout. Pool-level, applied per
+    // server. Optional; defaults to a sensible value (e.g. 30m) when unset.
+    OnboardingTimeout *metav1.Duration `json:"onboardingTimeout,omitempty"`
+
     // No provisioning-network fields. Hardware validation uses fast out-of-band
     // (Redfish) inspection (spec.inspectionMode: fast), which queries the BMC
     // directly and never boots the host over a provisioning network, so no DHCP/
@@ -396,7 +403,7 @@ type OnboardingRequestStatus struct {
 
 // OnboardingServerSummary is the compact per-server record embedded in
 // OnboardingRequestStatus. It intentionally excludes hardwareDetails and other
-// heavy or internal per-server fields (e.g. retryCount, vendor), which remain on
+// heavy or internal per-server fields (e.g. hardwareDetails, vendor), which remain on
 // the OnboardingServer CR. Name is the OnboardingServer CR handle; because it is
 // derived from the server's bmcAddress it also identifies which spec.servers
 // entry the record corresponds to, so no separate bmcAddress field is needed. The
@@ -419,7 +426,7 @@ its validation, controller behavior, and tests), not in the v1 CRD:
 
 | Field(s) | Delivered in | Gated on |
 |---|---|---|
-| `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, descriptions, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `bootInterfaceSelector`, `servers[]` (`bmcAddress`, `desiredCredentialsVaultSecret`, `bootMACAddress`) | **v1** | METAL-1784 |
+| `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, the description fields, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `bootInterfaceSelector`, `onboardingTimeout`, `servers[]` | **v1** | METAL-1784 |
 | `bmcSubnet`, `bmcGateway` | BMC address-pinning phase | OCPSTRAT-3585 |
 | `disableBmcCertificateVerification` | BMC credential-provisioning phase | OCPSTRAT-3519 |
 | `authMode`, `ldapConfig` | LDAP mode phase | OCPSTRAT-3552 |
@@ -883,8 +890,14 @@ type OnboardingServerStatus struct {
     SerialNumber    string             `json:"serialNumber,omitempty"`
     HardwareDetails map[string]string  `json:"hardwareDetails,omitempty"` // Normalized canonical match attributes (see Hardware attribute matching)
     BmhName         string             `json:"bmhName,omitempty"`
-    RetryCount      int                `json:"retryCount,omitempty"`
-    LastAttemptAt   *metav1.Time       `json:"lastAttemptAt,omitempty"`
+
+    // OnboardingStartedAt is when onboarding first began for this server. Onboarding
+    // does not use a fixed retry-count budget — transient errors are retried with
+    // backoff like any controller — but a server that has not reached Completed within
+    // the pool-level spec.onboardingTimeout (measured from this time) goes terminal
+    // Failed with reason OnboardingTimeout. This gives one clear deadline instead of
+    // trying to define which errors consume a retry budget.
+    OnboardingStartedAt *metav1.Time    `json:"onboardingStartedAt,omitempty"`
 
     // MutationProgress records every BMC-mutation operation the controller has
     // requested and how far it got — independent of State. When a mutation fails,
@@ -1096,7 +1109,7 @@ never reads them either. `GET onboardingRequests/{id}` returns exactly what is i
 Resource derived from the BMH (available from the inventory API once the host is
 published), so composing it here would duplicate the inventory and re-couple the
 facade to OnboardingServer. Full per-server forensic detail (`vendor`, `hardwareDetails`,
-`serialNumber`, `bmhName`, `retryCount`, cleanup status) stays on
+`serialNumber`, `bmhName`, cleanup status) stays on
 the OnboardingServer CR for `oc`-based inspection. Retrying a single failed server is
 likewise a cluster-side operation (`oc delete onboardingserver …`, see
 [Retrying a failed server](#retrying-a-failed-server)), not a REST call.
@@ -1275,8 +1288,10 @@ DisablingLocalAccounts (authMode=ldap + disableLocalAccounts only; skipped other
     ▼  LDAP, so this never fails the server — it proceeds to Completed regardless.
 Completed (terminal) — host is queryable in the O2 IMS inventory
 
-Any non-terminal state EXCEPT DisablingLocalAccounts ──► Failed (on unrecoverable
-error or retries exhausted). DisablingLocalAccounts is best-effort and always
+Any non-terminal state EXCEPT DisablingLocalAccounts ──► Failed (on an unrecoverable
+error, or reason=OnboardingTimeout when the server has not reached Completed within
+the pool-level spec.onboardingTimeout; transient errors are retried with backoff, not
+counted against a fixed budget). DisablingLocalAccounts is best-effort and always
 ends at Completed.
 On VendorMismatch / HwMismatch the controller deletes the (still-held) BMH.
 ```

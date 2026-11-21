@@ -312,13 +312,22 @@ the marker is idempotent; once it is gone the controller transitions to
 
 **Error handling:**
 
-- Transient errors: increment `status.retryCount`, set `status.lastAttemptAt`, stay in current state. Controller requeues with backoff.
-- Permanent errors: transition to terminal state with detail in `status.stateMessage`
-- Max retries: 5 (configurable), then transition to `Failed` — **except** the
-  `DisablingLocalAccounts` state, which is best-effort: on exhausted retries it transitions to
-  `Completed` (not `Failed`) and records the incomplete hardening in
-  `status.stateMessage` and the `LocalAccountsDisabled` condition
-- Backoff: `min(30s * 2^retryCount, 5m)` — implemented via controller requeue delay
+- Transient errors: stay in the current state and requeue with exponential backoff —
+  the same way the project's other controllers handle transient API/BMC/dependency
+  errors. There is **no fixed retry-count budget**; "what counts as a failed attempt"
+  is deliberately not defined (a re-observed BMO error is not a new attempt).
+- Permanent errors: transition to the terminal state with detail in
+  `status.stateMessage`.
+- **Overall deadline:** a server that has not reached `Completed` within the
+  pool-level `spec.onboardingTimeout` (measured from `status.onboardingStartedAt`)
+  goes terminal `Failed` with reason `OnboardingTimeout`. This single deadline
+  replaces a per-state max-retry limit and gives a clear, uniform rule. **Exception:**
+  `DisablingLocalAccounts` is best-effort and post-`Publishing` — it is **not** subject
+  to the onboarding timeout; on persistent failure it still proceeds to `Completed`
+  and records the incomplete hardening in `status.stateMessage` and the
+  `LocalAccountsDisabled` condition.
+- Backoff: standard controller-runtime exponential backoff on requeue (capped), not
+  tied to a persisted counter.
 - Idempotency: each step checks whether its work is already done before acting
   (e.g., if credentials were already changed, use desired creds for subsequent
   steps; if the BMH already exists it is adopted rather than re-created in
@@ -1476,9 +1485,11 @@ fast out-of-band (Redfish) inspection, producing a `HardwareData` CR in seconds.
 
 - **Success**: `HardwareData` becomes available and the BMH reaches `available`
   (still held). Transition to `Inventorying`.
-- **Registration/authentication failure** (wrong default credentials, BMC
-  unreachable): BMO reports an error status. Retry with backoff up to 5 times; if
-  exhausted, transition to `AuthFailed` (terminal) and delete the held BMH.
+- **Registration/authentication failure** (wrong credentials, BMC unreachable):
+  BMO reports an error status. Retry with backoff; on an unrecoverable
+  credentials-rejected result transition to `AuthFailed` (terminal), or if the
+  pool-level `onboardingTimeout` elapses first, to `Failed`
+  (reason `OnboardingTimeout`) — either way delete the held BMH.
 
 #### 3c. Inspecting → Inventorying
 
@@ -1649,7 +1660,7 @@ NAME            STATE                  VENDOR   BMC ADDRESS     BMH             
 
 # Inspect a specific server
 $ oc get onboardingserver 10-10-10-103 -n pool-toronto-east-1 -o yaml
-# ... full status with hardwareDetails, retryCount, etc.
+# ... full status with hardwareDetails, onboardingStartedAt, etc.
 
 # View the BMHs. All exist from the Inspecting state onward, but only the
 # published one (inventory-hold marker removed) is surfaced to O2 IMS inventory.
@@ -1728,7 +1739,7 @@ NAME            STATE        VENDOR   BMC ADDRESS     BMH   AGE
 10-10-10-102    AuthFailed            10.10.10.102          3m
 
 $ oc get onboardingserver 10-10-10-102 -n pool-toronto-east-1 -o jsonpath='{.status.stateMessage}'
-BMO could not register BMH with default credentials after 5 attempts (BMC rejected credentials)
+BMO could not register BMH with default credentials (BMC rejected credentials)
 ```
 
 `AuthFailed` is a pre-mutation state, so retry is per server: fix the root cause —
