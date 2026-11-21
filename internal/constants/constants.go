@@ -47,10 +47,11 @@ const (
 	OCloudSitesPath        = "/oCloudSites"
 
 	// Cluster API paths
-	ClusterResourceTypesPath = "/clusterResourceTypes"
-	ClusterResourcePath      = "/clusterResource"
-	NodeClusterTypesPath     = "/nodeClusterTypes"
-	NodeClustersPath         = "/nodeClusters"
+	ClusterResourceTypesPath  = "/clusterResourceTypes"
+	ClusterResourceGroupsPath = "/clusterResourceGroups"
+	ClusterResourcePath       = "/clusterResource"
+	NodeClusterTypesPath      = "/nodeClusterTypes"
+	NodeClustersPath          = "/nodeClusters"
 
 	// Monitoring/Alarms API paths
 	AlarmsPath = "/alarms"

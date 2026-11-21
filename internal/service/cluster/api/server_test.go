@@ -23,6 +23,7 @@ import (
 	"github.com/openshift-kni/oran-o2ims/internal/service/cluster/db/repo/generated"
 	svcapi "github.com/openshift-kni/oran-o2ims/internal/service/common/api"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/notifier"
+	svcutils "github.com/openshift-kni/oran-o2ims/internal/service/common/utils"
 )
 
 type mockClientProvider struct {
@@ -317,6 +318,137 @@ var _ = Describe("Cluster Server", func() {
 				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetAlarmDictionary200JSONResponse{}))
 				Expect(resp.(apigenerated.GetAlarmDictionary200JSONResponse).AlarmDefinition).To(HaveLen(2))
 			})
+		})
+	})
+
+	Describe("GetClusterResourceGroups", func() {
+		When("the repository query fails", func() {
+			It("returns an error", func() {
+				mockRepo.EXPECT().
+					GetClusterResourceGroups(gomock.Any()).
+					Return(nil, fmt.Errorf("db error"))
+
+				resp, err := server.GetClusterResourceGroups(ctx, apigenerated.GetClusterResourceGroupsRequestObject{})
+
+				Expect(err).To(HaveOccurred())
+				Expect(resp).To(BeNil())
+			})
+		})
+
+		When("an unknown field is requested", func() {
+			It("returns 400 bad request", func() {
+				fields := "doesNotExist"
+
+				resp, err := server.GetClusterResourceGroups(ctx, apigenerated.GetClusterResourceGroupsRequestObject{
+					Params: apigenerated.GetClusterResourceGroupsParams{Fields: &fields},
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroups400ApplicationProblemPlusJSONResponse{}))
+				Expect(resp.(apigenerated.GetClusterResourceGroups400ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusBadRequest))
+			})
+		})
+
+		When("no groups exist", func() {
+			It("returns 200 OK with an empty list", func() {
+				mockRepo.EXPECT().
+					GetClusterResourceGroups(gomock.Any()).
+					Return([]models.ClusterResourceGroup{}, nil)
+
+				resp, err := server.GetClusterResourceGroups(ctx, apigenerated.GetClusterResourceGroupsRequestObject{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroups200JSONResponse{}))
+				Expect(resp.(apigenerated.GetClusterResourceGroups200JSONResponse)).To(BeEmpty())
+			})
+		})
+
+		When("groups exist", func() {
+			It("returns 200 OK with the groups and their members", func() {
+				memberID := uuid.New()
+				mockRepo.EXPECT().
+					GetClusterResourceGroups(gomock.Any()).
+					Return([]models.ClusterResourceGroup{{
+						ClusterResourceGroupID: testUUID,
+						Name:                   "worker",
+						Description:            "worker node group of cluster test",
+						ClusterResources:       []uuid.UUID{memberID},
+					}}, nil)
+
+				resp, err := server.GetClusterResourceGroups(ctx, apigenerated.GetClusterResourceGroupsRequestObject{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroups200JSONResponse{}))
+				groups := resp.(apigenerated.GetClusterResourceGroups200JSONResponse)
+				Expect(groups).To(HaveLen(1))
+				Expect(groups[0].ClusterResourceGroupId).To(Equal(testUUID))
+				Expect(groups[0].Name).To(Equal("worker"))
+				Expect(*groups[0].ClusterResources).To(Equal([]uuid.UUID{memberID}))
+			})
+		})
+	})
+
+	Describe("GetClusterResourceGroup", func() {
+		When("the repository query fails", func() {
+			It("returns internal server error", func() {
+				mockRepo.EXPECT().
+					GetClusterResourceGroup(gomock.Any(), testUUID).
+					Return(nil, fmt.Errorf("db error"))
+
+				resp, err := server.GetClusterResourceGroup(ctx, apigenerated.GetClusterResourceGroupRequestObject{
+					ClusterResourceGroupId: testUUID,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroup500ApplicationProblemPlusJSONResponse{}))
+				Expect(resp.(apigenerated.GetClusterResourceGroup500ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusInternalServerError))
+			})
+		})
+
+		When("the group is not found", func() {
+			It("returns 404 not found response", func() {
+				mockRepo.EXPECT().
+					GetClusterResourceGroup(gomock.Any(), testUUID).
+					Return(nil, svcutils.ErrNotFound)
+
+				resp, err := server.GetClusterResourceGroup(ctx, apigenerated.GetClusterResourceGroupRequestObject{
+					ClusterResourceGroupId: testUUID,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroup404ApplicationProblemPlusJSONResponse{}))
+				Expect(resp.(apigenerated.GetClusterResourceGroup404ApplicationProblemPlusJSONResponse).Status).To(Equal(http.StatusNotFound))
+			})
+		})
+
+		When("the group is found", func() {
+			It("returns 200 OK", func() {
+				mockRepo.EXPECT().
+					GetClusterResourceGroup(gomock.Any(), testUUID).
+					Return(&models.ClusterResourceGroup{
+						ClusterResourceGroupID: testUUID,
+						Name:                   "master",
+						Description:            "master node group of cluster test",
+						ClusterResources:       []uuid.UUID{uuid.New()},
+					}, nil)
+
+				resp, err := server.GetClusterResourceGroup(ctx, apigenerated.GetClusterResourceGroupRequestObject{
+					ClusterResourceGroupId: testUUID,
+				})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp).To(BeAssignableToTypeOf(apigenerated.GetClusterResourceGroup200JSONResponse{}))
+				Expect(resp.(apigenerated.GetClusterResourceGroup200JSONResponse).ClusterResourceGroupId).To(Equal(testUUID))
+				Expect(resp.(apigenerated.GetClusterResourceGroup200JSONResponse).Name).To(Equal("master"))
+			})
+		})
+	})
+
+	Describe("OpenAPI specification", func() {
+		It("is valid", func() {
+			spec, err := apigenerated.GetSpec()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spec.Validate(ctx)).To(Succeed())
 		})
 	})
 

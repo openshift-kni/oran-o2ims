@@ -196,6 +196,56 @@ func (r *ClusterServer) GetClusterResource(ctx context.Context, request api.GetC
 	return api.GetClusterResource200JSONResponse(object), nil
 }
 
+// GetClusterResourceGroups receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ClusterServer) GetClusterResourceGroups(ctx context.Context, request api.GetClusterResourceGroupsRequestObject) (api.GetClusterResourceGroupsResponseObject, error) {
+	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
+	if err := options.Validate(api.ClusterResourceGroup{}); err != nil {
+		return api.GetClusterResourceGroups400ApplicationProblemPlusJSONResponse{
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		}, nil
+	}
+
+	records, err := r.Repo.GetClusterResourceGroups(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster resource groups: %w", err)
+	}
+
+	objects := make([]api.ClusterResourceGroup, len(records))
+	for i, record := range records {
+		objects[i] = models.ClusterResourceGroupToModel(&record, options)
+	}
+
+	return api.GetClusterResourceGroups200JSONResponse(objects), nil
+}
+
+// GetClusterResourceGroup receives the API request to this endpoint, executes the request, and responds appropriately
+func (r *ClusterServer) GetClusterResourceGroup(ctx context.Context, request api.GetClusterResourceGroupRequestObject) (api.GetClusterResourceGroupResponseObject, error) {
+	ctx = logging.AppendCtx(ctx, slog.String("clusterResourceGroupId", request.ClusterResourceGroupId.String()))
+
+	record, err := r.Repo.GetClusterResourceGroup(ctx, request.ClusterResourceGroupId)
+	if errors.Is(err, svcutils.ErrNotFound) {
+		return api.GetClusterResourceGroup404ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"ClusterResourceGroupId": request.ClusterResourceGroupId.String(),
+			},
+			Detail: "requested ClusterResourceGroup not found",
+			Status: http.StatusNotFound,
+		}, nil
+	} else if err != nil {
+		return api.GetClusterResourceGroup500ApplicationProblemPlusJSONResponse{
+			AdditionalAttributes: &map[string]string{
+				"ClusterResourceGroupId": request.ClusterResourceGroupId.String(),
+			},
+			Detail: err.Error(),
+			Status: http.StatusInternalServerError,
+		}, nil
+	}
+
+	object := models.ClusterResourceGroupToModel(record, commonapi.NewDefaultFieldOptions())
+	return api.GetClusterResourceGroup200JSONResponse(object), nil
+}
+
 // GetNodeClusterTypes receives the API request to this endpoint, executes the request, and responds appropriately
 func (r *ClusterServer) GetNodeClusterTypes(ctx context.Context, request api.GetNodeClusterTypesRequestObject) (api.GetNodeClusterTypesResponseObject, error) {
 	options := commonapi.NewFieldOptions(request.Params.AllFields, request.Params.Fields, request.Params.ExcludeFields)
