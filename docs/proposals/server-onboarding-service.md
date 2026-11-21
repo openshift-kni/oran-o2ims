@@ -222,6 +222,16 @@ type OnboardingRequestSpec struct {
     // "Security Considerations".
     DisableBmcCertificateVerification bool `json:"disableBmcCertificateVerification,omitempty"`
 
+    // BootInterfaceSelector is the pool-level default for identifying each host's
+    // provisioning/boot NIC among the NICs fast inspection reports, so the controller
+    // can set the boot-interface label / spec.bootMACAddress before Publishing (a host
+    // with no boot interface cannot later be provisioned). It selects by NIC name or
+    // MAC prefix (OUI). Resolution per server: a per-server servers[].bootMACAddress
+    // wins; else this selector; else, if exactly one NIC was discovered, it is used;
+    // else (ambiguous multi-NIC, no match) the server fails with a clear message.
+    // Optional. See "BMH creation".
+    BootInterfaceSelector *BootInterfaceSelector `json:"bootInterfaceSelector,omitempty"`
+
     // No provisioning-network fields. Hardware validation uses fast out-of-band
     // (Redfish) inspection (spec.inspectionMode: fast), which queries the BMC
     // directly and never boots the host over a provisioning network, so no DHCP/
@@ -246,6 +256,23 @@ type ServerSpec struct {
     // BMC credentials for this specific server. Each server gets unique credentials.
     // Required when authMode is "local". Not used when authMode is "ldap".
     DesiredCredentialsVaultSecret string `json:"desiredCredentialsVaultSecret,omitempty"`
+
+    // BootMACAddress optionally pins this server's provisioning/boot NIC MAC. It is a
+    // per-server override that takes precedence over the pool-level
+    // bootInterfaceSelector when resolving the boot interface before Publishing (see
+    // BMH creation). Use it for a host whose boot NIC the pool selector cannot
+    // identify. Optional.
+    BootMACAddress string `json:"bootMACAddress,omitempty"`
+}
+
+// BootInterfaceSelector identifies the boot NIC among inspected NICs. Exactly one of
+// the fields is set.
+type BootInterfaceSelector struct {
+    // NICName matches the inspected NIC by name (e.g. "eno1").
+    NICName string `json:"nicName,omitempty"`
+    // MACPrefix matches the inspected NIC whose MAC starts with this prefix/OUI
+    // (e.g. "aa:bb:cc").
+    MACPrefix string `json:"macPrefix,omitempty"`
 }
 
 type HardwareAttribute struct {
@@ -392,7 +419,7 @@ its validation, controller behavior, and tests), not in the v1 CRD:
 
 | Field(s) | Delivered in | Gated on |
 |---|---|---|
-| `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, descriptions, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `servers[]` (`bmcAddress`, `desiredCredentialsVaultSecret`) | **v1** basic flow | METAL-1784 |
+| `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, descriptions, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `bootInterfaceSelector`, `servers[]` (`bmcAddress`, `desiredCredentialsVaultSecret`, `bootMACAddress`) | **v1** | METAL-1784 |
 | `bmcSubnet`, `bmcGateway` | BMC address-pinning phase | OCPSTRAT-3585 |
 | `disableBmcCertificateVerification` | BMC credential-provisioning phase | OCPSTRAT-3519 |
 | `authMode`, `ldapConfig` | LDAP mode phase | OCPSTRAT-3552 |
@@ -1239,13 +1266,14 @@ UpdatingCredentials (authMode=local) ─── OR ─── ConfiguringLdap (aut
     │  BMO applies it and                     │  BMO applies it over Redfish. ESO
     ▼  updates the BMH Secret.                ▼  keeps the BMC Secret in sync.
 Publishing
-    │  Remove inventory-hold marker → BMH becomes visible to O2 IMS inventory.
+    │  Remove inventory-hold marker, then WAIT until the host's O2 IMS Resource is
+    │  actually present/queryable in inventory (not just the marker removed).
     ▼
 DisablingLocalAccounts (authMode=ldap + disableLocalAccounts only; skipped otherwise)
     │  Disable local BMC accounts via the Metal3 LDAP/credentials API
     │  (irreversible). Best-effort: the host is already published and works over
     ▼  LDAP, so this never fails the server — it proceeds to Completed regardless.
-Completed (terminal)
+Completed (terminal) — host is queryable in the O2 IMS inventory
 
 Any non-terminal state EXCEPT DisablingLocalAccounts ──► Failed (on unrecoverable
 error or retries exhausted). DisablingLocalAccounts is best-effort and always

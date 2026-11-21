@@ -697,14 +697,19 @@ provisioning network.
     boot-interface label are absent, so the controller must supply boot-interface
     information **before publication** or an allocated host cannot be provisioned
     without manual repair. Fast inspection enumerates the host NICs in `HardwareData`,
-    so at `Publishing` the controller records the boot interface on the BMH — setting
-    the boot-interface label `setBootMACAddressFromLabel()` reads (or
-    `spec.bootMACAddress` directly) from the inspected NICs. A server whose boot
-    interface cannot be determined **fails rather than publishing** a host that
-    provisioning could not later boot. (**Open question:** on a multi-NIC host, which
-    NIC is the provisioning/boot interface is not derivable from OOB inspection alone
-    and may need a pool-level boot-interface selector — see
-    [Open Questions](#12-open-questions--product-inputs).)
+    so at `Publishing` the controller resolves the boot NIC and records it on the BMH
+    (setting the boot-interface label `setBootMACAddressFromLabel()` reads, or
+    `spec.bootMACAddress`). Resolution order:
+    1. **Per-server `servers[].bootMACAddress`**, if set, wins.
+    2. Else the **pool-level `spec.bootInterfaceSelector`** (by NIC name or MAC
+       prefix) matched against the inspected NICs.
+    3. Else, if **exactly one** NIC was discovered, select it automatically.
+    4. Else (ambiguous multi-NIC with no selector/override, or no match) the server
+       **fails with a clear message** rather than publishing a host provisioning
+       cannot boot.
+    This assumes fast inspection reports all relevant NICs for the pool's vendors —
+    the one remaining product input (see
+    [Open Questions](#12-open-questions--product-inputs)).
   - `spec.online`: **not set** (defaults to `false`) — fast inspection does not
     power the host on; the host stays powered off until the normal provisioning
     flow deploys it
@@ -754,6 +759,19 @@ O-RAN/O2 IMS inventory before it is published. (Publishing happens at
 `Publishing`, before `Completed`; for the `ldap` + `disableLocalAccounts` path the
 host is therefore published and visible during the subsequent `DisablingLocalAccounts` state,
 which runs against the already-published host.)
+
+**`Completed` means queryable in inventory, not just "marker removed."** Because the
+existing collector surfaces the Resource **asynchronously** after the marker is
+removed, the controller does not jump straight to `Completed`: after removing the
+marker it **waits until the host's O2 IMS Resource is actually present** — polling the
+resources collector's output / the inventory read path for the Resource derived from
+this BMH — and only then transitions to `Completed`. So `Completed` is an end-to-end
+guarantee that the host is queryable through the inventory (and REST) API, not merely
+that publishing was initiated. If the Resource does not appear within a bounded
+timeout, the server stays in `Publishing` with a diagnostic in `status.stateMessage`
+rather than falsely reporting `Completed`. (For the `ldap` + `disableLocalAccounts`
+path, this inventory check is satisfied at `Publishing`; `DisablingLocalAccounts` then
+runs against the already-queryable host before the final `Completed`.)
 
 ### Inventory-hold marker and `IncludeInInventory`
 
@@ -1578,7 +1596,10 @@ oc annotate bmh -n pool-toronto-east-1 onboarded-10-10-10-101 \
 
 With the marker gone and the BMH in `available`, the existing inventory pipeline
 (`IncludeInInventory()`) now includes it, and the resources collector surfaces it
-as an O2 IMS Resource under `pool-toronto-east-1`. Transition to `Completed`.
+as an O2 IMS Resource under `pool-toronto-east-1`. The controller **waits for that
+Resource to become queryable** in the inventory before transitioning to `Completed`,
+so `Completed` means the host is actually in inventory (not just that the marker was
+removed).
 
 #### 3g. Publishing → Completed
 
@@ -1840,7 +1861,7 @@ testing cannot be finalized until the numbers are supplied.
 |---|------|----------------|-----------------|
 | 1 | **Batch scale / timing target** | Max servers per OnboardingRequest and the time budget (e.g. "100 servers within N minutes"). | No throughput criterion; `MaxConcurrentReconciles` can't be validated against a target. The architecture scales via that knob; only the number is absent. |
 | 2 | **Per-Hub concurrent-batch count** | Max OnboardingRequests/pools a single Hub onboards concurrently. | No capacity-planning ceiling. The reconcile pool is global, not per-pool, so a supported maximum is needed to size it (and to decide whether per-pool fairness is ever needed). |
-| 3 | **Boot-interface selection** | How the provisioning/boot NIC is identified on a multi-NIC host (e.g. a pool-level selector by NIC name or MAC prefix) so the controller can set the boot-interface label / `spec.bootMACAddress` from inspection before `Publishing`. | On single-NIC hosts the controller can infer it; on multi-NIC hosts it cannot pick the boot interface from OOB inspection alone, so such servers would fail to publish without a selector. See [BMH creation](#6-hardware-inventory-and-bmh-creation). |
+| 3 | **Fast-inspection NIC coverage** | Confirmation of which NICs fast out-of-band inspection reports for the supported vendors (Dell/HPE/Lenovo). The boot-NIC selection mechanism is decided — per-server `bootMACAddress` override > pool-level `bootInterfaceSelector` (NIC name / MAC prefix) > the single discovered NIC > fail-closed on ambiguous multi-NIC (see [BMH creation](#6-hardware-inventory-and-bmh-creation)) — but the single-NIC auto-select is only safe if inspection reliably enumerates all NICs. | If fast inspection under-reports NICs, single-NIC auto-select could pick the wrong interface; pools on affected vendors should set an explicit selector/override until coverage is confirmed. |
 
 Both feed directly into the [Concurrency and sizing](#7-controllers) guidance:
 once the targets are known, the `MaxConcurrentReconciles` default and any
