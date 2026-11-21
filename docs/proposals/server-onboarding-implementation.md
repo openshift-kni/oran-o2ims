@@ -1148,9 +1148,10 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   `onboarding.openshift.io/hardening-failed`,
   `onboarding.openshift.io/deonboarding` annotation keys, the per-BMC
   `needs-bmc-reset` durable record (an operator-owned CR or ConfigMap in the
-  operator namespace keyed by the stable **BMC management NIC MAC** with the
-  last-known `bmcAddress` as a secondary lookup, so it survives both
-  OnboardingServer and OnboardingRequest deletion and an address change — see
+  operator namespace keyed by `bmcAddress` — the only identifier available
+  pre-inspection — with the BMC management NIC MAC stored as a secondary
+  correlation attribute, so it survives both OnboardingServer and
+  OnboardingRequest deletion — see
   [Retrying a failed server](server-onboarding-service.md#retrying-a-failed-server)),
   and the server subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
