@@ -1372,7 +1372,9 @@ than the operator doing an out-of-band reset.
 
 **Exception — partial restore.** BMC restore is best-effort: if it cannot complete it
 ends `partial` and the BMC may **retain non-default credentials (or LDAP config)**. A
-retry then created with the provided/default credentials would fail at `AuthFailed`.
+retry then created with the provided/default credentials **may** fail at `AuthFailed`
+(if credentials were not restored) — or, if credentials were restored but LDAP was not,
+authenticate and silently re-onboard with stale LDAP config still in place.
 The `OnboardingServer`'s `cleanupStatus` is **lost when that object is deleted** (direct
 delete, or the de-onboard that removes it), so the partial outcome must be recorded in
 durable state. It **cannot** live on the `OnboardingRequest`: a partial restore also
