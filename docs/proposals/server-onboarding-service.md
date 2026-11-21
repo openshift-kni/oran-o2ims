@@ -239,6 +239,14 @@ type OnboardingRequestSpec struct {
     // server. Optional; defaults to a sensible value (e.g. 30m) when unset.
     OnboardingTimeout *metav1.Duration `json:"onboardingTimeout,omitempty"`
 
+    // HardeningTimeout bounds the post-Publishing DisablingLocalAccounts step, which
+    // is best-effort and exempt from OnboardingTimeout (the server is already
+    // published). Measured from entry to DisablingLocalAccounts; when it elapses the
+    // controller stops retrying, records the incomplete hardening in
+    // status.stateMessage, sets the LocalAccountsDisabled condition False with reason
+    // HardeningTimeout, and proceeds to Completed. Optional; defaults e.g. 30m.
+    HardeningTimeout *metav1.Duration `json:"hardeningTimeout,omitempty"`
+
     // No provisioning-network fields. Hardware validation uses fast out-of-band
     // (Redfish) inspection (spec.inspectionMode: fast), which queries the BMC
     // directly and never boots the host over a provisioning network, so no DHCP/
@@ -432,7 +440,7 @@ its validation, controller behavior, and tests), not in the v1 CRD:
 | `globalLocationName`, `oCloudSiteName`, `resourcePoolName`, the description fields, `defaultCredentialsVaultSecret`, `bmcVendor`, `hardwareAttributes`, `bmcAddressTemplate`, `bootInterfaceSelector`, `onboardingTimeout`, `servers[]` | **v1** | METAL-1784 |
 | `bmcSubnet`, `bmcGateway` | BMC address-pinning phase | OCPSTRAT-3585 |
 | `disableBmcCertificateVerification` | BMC credential-provisioning phase | OCPSTRAT-3519 |
-| `authMode`, `ldapConfig` | LDAP mode phase | OCPSTRAT-3552 |
+| `authMode`, `ldapConfig`, `hardeningTimeout` | LDAP mode phase | OCPSTRAT-3552 |
 | `hardwareProfileName` | Firmware/BIOS baseline phase | — (reuses the existing hardware-manager profile path) |
 
 Until a field's phase lands it is not part of the served CRD, so the API never
@@ -1001,11 +1009,19 @@ OnboardingServer is deleted directly:
    the cluster; the hardware manager deallocates it back to `available`), then retries
    from step 1.
 3. **Wait for any in-flight BMC operation to settle, then restore the BMC**
-   best-effort via the Metal3 APIs — revert the NIC pin to DHCP, restore the
-   pool-default credentials, and (LDAP mode) disable LDAP / re-enable local auth — so
-   the server returns to a cleanly **re-onboardable** state with **no manual BMC
-   work**. Restoring the BMC is the controller's responsibility; failures are
-   recorded (`cleanupStatus: partial`, with the reason) but do not wedge teardown.
+   best-effort via the Metal3 APIs so the server returns to a cleanly
+   **re-onboardable** state with **no manual BMC work**. Restore in an order that keeps
+   the BMC reachable at its current `bmcAddress` until the end: **(a)** restore the
+   pool-default credentials, **(b)** (LDAP mode) disable LDAP / re-enable local auth,
+   and only **(c)** last, revert the BMC networking pin to DHCP — the single step that
+   can change the BMC's address (releasing its static assignment lets the BMC take a new
+   DHCP lease). Doing the address-affecting revert last means any **partial** restore
+   that fails at (a) or (b) leaves the original static `bmcAddress` intact, so the
+   `needs-bmc-reset` record (keyed by `bmcAddress`) stays reachable for the next
+   request; the networking revert only runs once (a) and (b) have succeeded, i.e. when
+   no reset gate is needed. Restoring the BMC is the controller's responsibility;
+   failures are recorded (`cleanupStatus: partial`, with the reason and the step that
+   failed) but do not wedge teardown.
 4. **Delete the BMH** and the per-server ExternalSecret/Secret, then remove the
    finalizer. The OnboardingServer stays visible (reporting de-onboarding progress in
    `status`) until its cleanup completes.
@@ -1365,13 +1381,24 @@ finalizer then deletes the request — losing the marker and letting a **brand-n
 request for the same BMC** re-onboard without the required reset. The partial outcome is
 therefore persisted to a resource that **outlives both the OnboardingServer and the
 OnboardingRequest**: a per-BMC **`needs-bmc-reset` record** (a small operator-owned CR —
-or a ConfigMap — in the operator namespace, **keyed by `bmcAddress`**, carrying the
-attempted restore step). The request finalizer must **write this record before it
-removes the request's finalizer**, so a partial restore is never dropped by request
-deletion. **Before onboarding any server** — on first onboarding and on every retry/
-recreate, regardless of which request owns it — the controller **checks for a
-`needs-bmc-reset` record matching the server's `bmcAddress`**; if one is present it
-holds the server in a `Blocked`/`NeedsBmcReset` state and does **not** proceed. The
+or a ConfigMap — in the operator namespace, carrying the attempted restore step). The
+record is **keyed by a stable BMC identity — the BMC management NIC MAC** discovered
+during inspection and recorded in OnboardingServer status — with the **last-known
+`bmcAddress`** stored as a secondary lookup. Two things keep the gate reachable even
+though the DHCP→static pin is reverted during restore: the revert **reuses the same
+leased IP** (backed by the durable per-MAC reservation / IPAM exclusion that is a BMC
+networking prerequisite), so `bmcAddress` is designed not to change; and the restore
+order above reverts networking **last**, so a partial restore that fails at an earlier
+step never reaches the address-affecting revert at all. Keying by MAC is
+defense-in-depth for the edge case where the address nonetheless differs (e.g. a
+misconfigured, non-durable reservation): a later request that arrives with a new
+`bmcAddress` still matches the gate by MAC. The request finalizer must **write this record
+before it removes the request's finalizer**, so a partial restore is never dropped by
+request deletion. **Before onboarding any server** — on first onboarding and on every
+retry/recreate, regardless of which request owns it — the controller **checks for a
+`needs-bmc-reset` record matching the server's BMC identity** (by recorded MAC, falling
+back to the last-known `bmcAddress`); if one is present it holds the server in a
+`Blocked`/`NeedsBmcReset` state and does **not** proceed. The
 operator resets the BMC out of band (reset credentials / disable LDAP — the same action
 the `AuthFailed` guidance describes) and **deletes the record** to confirm; only then
 does onboarding proceed. This keeps a partial restore from silently looping into

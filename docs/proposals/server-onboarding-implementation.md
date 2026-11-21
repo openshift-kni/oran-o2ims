@@ -323,9 +323,16 @@ the marker is idempotent; once it is gone the controller transitions to
   goes terminal `Failed` with reason `OnboardingTimeout`. This single deadline
   replaces a per-state max-retry limit and gives a clear, uniform rule. **Exception:**
   `DisablingLocalAccounts` is best-effort and post-`Publishing` — it is **not** subject
-  to the onboarding timeout; on persistent failure it still proceeds to `Completed`
-  and records the incomplete hardening in `status.stateMessage` and the
-  `LocalAccountsDisabled` condition.
+  to the onboarding timeout (the server is already published and usable). Because it is
+  exempt from that deadline it needs its **own** exhaustion bound so a persistent
+  transient error cannot pin the server in `DisablingLocalAccounts` forever and break
+  the "always ends at `Completed`" guarantee: the controller retries with backoff up to
+  a **separate fixed bound** (`spec.hardeningTimeout`, default e.g. 30m, measured from
+  state entry). When that bound is reached it **stops retrying**, records the incomplete
+  hardening in `status.stateMessage` and sets the `LocalAccountsDisabled` condition to
+  `False` with reason `HardeningTimeout`, then **proceeds to `Completed`** (the operator
+  can disable local accounts out of band and the condition makes the gap observable). A
+  later successful reconcile may still flip the condition to `True`.
 - Backoff: standard controller-runtime exponential backoff on requeue (capped), not
   tied to a persisted counter.
 - Idempotency: each step checks whether its work is already done before acting
@@ -370,9 +377,14 @@ Cleanup only applies to **per-server resources**. The shared ExternalSecret CRs 
 | `Publishing` | Inventory-hold marker removed; BMH published | **Server-level** | **No cleanup while the server stays desired** — the published BMH is retained (never re-held). On **de-onboard** (entry removed / request deleted) it is restored to pool defaults and deleted, gated on the host not being allocated/provisioned (see [Deletion semantics](server-onboarding-service.md#deletion-semantics)). |
 | `DisablingLocalAccounts` (ldap) | Local account disabled (`disableLocalAccounts: true`) | **Server-level** | **Not reversible** — with the local account gone there is no non-LDAP path to re-enable it. Applied after `Publishing`, before `Completed`; best-effort. |
 
-**Per-server cleanup order:** **restore the BMC to pool defaults** — revert the NIC
-pin to DHCP, restore the default credentials, and (LDAP) disable LDAP / re-enable
-local auth — then **delete the BMH** and the per-server ExternalSecret. On a
+**Per-server cleanup order:** **restore the BMC to pool defaults** in an order that
+keeps the BMC reachable at its current `bmcAddress` until the end — first restore the
+default credentials, then (LDAP) disable LDAP / re-enable local auth, and **last**
+revert the NIC pin to DHCP (the only step that can affect the address) — then
+**delete the BMH** and the per-server ExternalSecret. Reverting networking last means a
+**partial** restore that fails earlier never changes the address, keeping the
+`needs-bmc-reset` gate reachable (see
+[Retrying a failed server](server-onboarding-service.md#retrying-a-failed-server)). On a
 **de-onboard** this runs for a published host too (after confirming it is not
 allocated/provisioned); when the server is still desired, the published BMH and its
 credentials are **retained** instead (see the finalizer classification below). The
@@ -1136,8 +1148,9 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   `onboarding.openshift.io/hardening-failed`,
   `onboarding.openshift.io/deonboarding` annotation keys, the per-BMC
   `needs-bmc-reset` durable record (an operator-owned CR or ConfigMap in the
-  operator namespace keyed by `bmcAddress`, so it survives both OnboardingServer
-  and OnboardingRequest deletion — see
+  operator namespace keyed by the stable **BMC management NIC MAC** with the
+  last-known `bmcAddress` as a secondary lookup, so it survives both
+  OnboardingServer and OnboardingRequest deletion and an address change — see
   [Retrying a failed server](server-onboarding-service.md#retrying-a-failed-server)),
   and the server subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
