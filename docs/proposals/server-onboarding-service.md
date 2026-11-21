@@ -278,7 +278,10 @@ type BootInterfaceSelector struct {
     // NICName matches the inspected NIC by name (e.g. "eno1").
     NICName string `json:"nicName,omitempty"`
     // MACPrefix matches the inspected NIC whose MAC starts with this prefix/OUI
-    // (e.g. "aa:bb:cc").
+    // (e.g. "aa:bb:cc"). The selector must resolve to exactly one NIC: if the
+    // prefix matches more than one inspected NIC (or none), boot-interface
+    // resolution fails rather than guessing — use a more specific prefix, NICName,
+    // or the per-server bootMACAddress override to disambiguate.
     MACPrefix string `json:"macPrefix,omitempty"`
 }
 
@@ -982,8 +985,15 @@ OnboardingServer is deleted directly:
    most one wins; the loser observes the conflict and re-evaluates. **Abandoned
    reservations** (an allocator that set a reservation then crashed before creating the
    `AllocatedNode`) are reclaimable after a bounded staleness timeout, so a crashed
-   allocation cannot block de-onboarding forever. (This serialization is required in
-   both docs — see [Deletion semantics](#deletion-semantics).)
+   allocation cannot block de-onboarding forever. **The allocator's `AllocatedNode`
+   commit is itself fenced by the BMH `resourceVersion` observed at reservation:** the
+   commit is a `resourceVersion`-guarded write to the BMH (promoting the reservation
+   marker to the `AllocatedNode`-owner state), so a **resumed** allocator whose stale
+   reservation was already reclaimed — and whose BMH the finalizer then de-onboarded
+   (or another allocator re-claimed) — **conflicts and fails to commit**, and retries
+   from selection. Reclamation and the commit can therefore never both succeed for the
+   same reservation. (This serialization is required in both docs — see
+   [Deletion semantics](#deletion-semantics).)
 2. **Never tear down a host that is in use.** If the re-check in step 1 finds the BMH
    **allocated or provisioned**, cleanup is **blocked**: the finalizer clears the hold
    (so the host is not stranded), records that it is waiting, and requeues until the
@@ -1347,16 +1357,25 @@ than the operator doing an out-of-band reset.
 **Exception — partial restore.** BMC restore is best-effort: if it cannot complete it
 ends `partial` and the BMC may **retain non-default credentials (or LDAP config)**. A
 retry then created with the provided/default credentials would fail at `AuthFailed`.
-Because the `OnboardingServer`'s `cleanupStatus` is **lost when that object is
-deleted** (direct delete, or the de-onboard that removes it), the partial outcome must
-be recorded in **durable state on the OnboardingRequest** — which outlives the
-OnboardingServer — as a per-server **`onboarding.openshift.io/needs-bmc-reset`** marker
-(keyed by `bmcAddress`, carrying the attempted restore step). While that marker is set,
-the desired-set controller **does not auto-recreate or retry** the server: it holds it
-in a `Blocked`/`NeedsBmcReset` state and waits. The operator resets the BMC out of band
-(reset credentials / disable LDAP — the same action the `AuthFailed` guidance
-describes) and **clears the marker** to confirm; only then does onboarding retry. This
-keeps a partial restore from silently looping into `AuthFailed`.
+The `OnboardingServer`'s `cleanupStatus` is **lost when that object is deleted** (direct
+delete, or the de-onboard that removes it), so the partial outcome must be recorded in
+durable state. It **cannot** live on the `OnboardingRequest`: a partial restore also
+happens during **request deletion** (de-onboarding the whole pool), and the request
+finalizer then deletes the request — losing the marker and letting a **brand-new
+request for the same BMC** re-onboard without the required reset. The partial outcome is
+therefore persisted to a resource that **outlives both the OnboardingServer and the
+OnboardingRequest**: a per-BMC **`needs-bmc-reset` record** (a small operator-owned CR —
+or a ConfigMap — in the operator namespace, **keyed by `bmcAddress`**, carrying the
+attempted restore step). The request finalizer must **write this record before it
+removes the request's finalizer**, so a partial restore is never dropped by request
+deletion. **Before onboarding any server** — on first onboarding and on every retry/
+recreate, regardless of which request owns it — the controller **checks for a
+`needs-bmc-reset` record matching the server's `bmcAddress`**; if one is present it
+holds the server in a `Blocked`/`NeedsBmcReset` state and does **not** proceed. The
+operator resets the BMC out of band (reset credentials / disable LDAP — the same action
+the `AuthFailed` guidance describes) and **deletes the record** to confirm; only then
+does onboarding proceed. This keeps a partial restore from silently looping into
+`AuthFailed`, even across request deletion and re-creation.
 
 Fix the root cause first — bad default-credentials/vault entry (`AuthFailed`), wrong
 hardware model (`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity

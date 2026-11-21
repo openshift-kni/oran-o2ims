@@ -711,11 +711,16 @@ provisioning network.
     `spec.bootMACAddress`). Resolution order:
     1. **Per-server `servers[].bootMACAddress`**, if set, wins.
     2. Else the **pool-level `spec.bootInterfaceSelector`** (by NIC name or MAC
-       prefix) matched against the inspected NICs.
+       prefix) matched against the inspected NICs. The selector must match
+       **exactly one** NIC: if it matches **none** or **more than one** (e.g. a
+       `macPrefix`/OUI shared by several NICs), resolution **fails** rather than
+       guessing — publishing with the wrong boot NIC would make the host
+       unbootable. Use a more specific selector or the per-server
+       `bootMACAddress` override to disambiguate.
     3. Else, if **exactly one** NIC was discovered, select it automatically.
-    4. Else (ambiguous multi-NIC with no selector/override, or no match) the server
-       **fails with a clear message** rather than publishing a host provisioning
-       cannot boot.
+    4. Else (ambiguous multi-NIC with no selector/override, or no/non-unique
+       match) the server **fails with a clear message** rather than publishing a
+       host provisioning cannot boot.
     This assumes fast inspection reports all relevant NICs for the pool's vendors —
     the one remaining product input (see
     [Open Questions](#12-open-questions--product-inputs)).
@@ -1129,9 +1134,12 @@ reads and writes OnboardingRequest / OnboardingServer CRs through `HubClient`.
   `onboarding.openshift.io/inventory-hold`,
   `onboarding.openshift.io/hardening-complete`,
   `onboarding.openshift.io/hardening-failed`,
-  `onboarding.openshift.io/deonboarding`, and the per-server
-  `onboarding.openshift.io/needs-bmc-reset` marker (on the OnboardingRequest)
-  annotation keys and the server subcommand name)
+  `onboarding.openshift.io/deonboarding` annotation keys, the per-BMC
+  `needs-bmc-reset` durable record (an operator-owned CR or ConfigMap in the
+  operator namespace keyed by `bmcAddress`, so it survives both OnboardingServer
+  and OnboardingRequest deletion — see
+  [Retrying a failed server](server-onboarding-service.md#retrying-a-failed-server)),
+  and the server subcommand name)
 - `internal/hardwaremanager/controller/inventory.go` — `IncludeInInventory()`
   must exclude BMHs carrying the inventory-hold marker (see
   [Inventory-hold marker and `IncludeInInventory`](#inventory-hold-marker-and-includeininventory))
