@@ -387,10 +387,10 @@ hwMgmtDefaults:
   # Passed through to ImageClusterInstall.spec.preProvisioning.
   ibiPreProvisioning:
     # Required: HTTPS URL of the live IBI ISO reachable from the BMC network.
-    # Must be an immutable URL for this generation run (see "Restricting
-    # ISOURL"). This path is illustrative; the final layout will be
-    # defined during ISO generation implementation.
-    isoURL: https://iso-server.example.com/ibi/example-generation-run/rhcos-ibi.iso
+    # Must be an immutable, content-addressed per-run URL (see "Restricting
+    # ISOURL"), not a mutable "latest" path — here the seed workflow's per-run
+    # path (ProvisioningRequest name + seed image digest).
+    isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
     # Required: expected SHA-256 digest, verified before boot to pin the exact
     # artifact (admission rejects a config that omits it). Matches
     # SeedGenerationStatus.ISODigest from seed generation.
@@ -903,35 +903,67 @@ version-pinned integration test** rather than assumed; if that test cannot pass,
 the fallback is a unique per-ICI ISO with the URL/token baked directly into
 `ignitionConfigOverride`. Tracked in [Open Question 2](#open-questions).
 
-#### Host network configuration for the callback
+#### Per-host network configuration for the live-ISO boot
 
-Everything above assumes the live-ISO host can already reach `CALLBACK_URL`.
-That is not automatic: the callback carrier (`DataImage`) delivers only the
-URL/token/attempt data, and — as noted above — `preprovisioningNetworkDataName`
-/ `networkData` are **not** reliably honored for a live-iso boot, so they cannot
-be assumed to configure the host's IP, route, and DNS. Without a defined network
-path the callback never leaves the host and the operator times the (possibly
-successful) preparation out. The design requires one of two explicit modes,
-selected per template:
+The live-ISO host needs working networking before it can do *anything* over the
+network — both the seed-image pull and release-image pre-cache that IBI
+preparation performs, and the `CALLBACK_URL` POST. This is not automatic:
+`preprovisioningNetworkDataName` / `networkData` are **not** reliably honored for
+a live-iso boot (see above), so they cannot be assumed to configure the host's IP,
+route, and DNS. Without a defined network path the seed pull fails (or, if it
+somehow succeeds, the callback never leaves the host) and the operator times the
+(possibly successful) preparation out.
 
-- **DHCP (default, must be validated).** DHCP on the provisioning network is the
-  assumed baseline, stated as an explicit prerequisite; the reachability check in
-  [Challenge 1](#1-callback-url-must-be-reachable-from-the-pre-provisioned-server)
-  is the gate: if the host cannot obtain an address and reach `callbackBaseURL`,
-  the operator fails closed with `PreProvisioningConfigInvalid` rather than
-  booting a host that can never call back.
-- **Static networking (DHCP-less environments).** When DHCP is unavailable, the
-  host IP/route/DNS are supplied at ISO build time — dracut `ip=`/`nameserver=`
-  kernel arguments and/or NetworkManager keyfiles injected via
-  `coreos-installer iso customize`, in the same `ignitionConfigOverride`/ISO-build
-  path that bakes the generic callback client. Because this is baked, a
-  static-network deployment needs its own per-host or per-site ISO variant (it
-  cannot ride the shared ISO's per-host data files) — a called-out cost of
-  DHCP-less operation.
+Rather than forcing a DHCP-or-per-host-ISO choice, the design **reuses the
+per-host network configuration the system already produces for IBI**: the
+`network-data-<bmh>` nmstate (derived from the ClusterInstance node network and
+carried today on the IBI config `DataImage`) is attached to the BMH as a
+`DataImage` for the pre-provisioning boot, alongside the live ISO. No new per-host
+artifact is introduced — it is the same nmstate the normal IBI install already
+applies.
 
-The supported live-ISO network path (whichever mode) is exercised by the same
-version-pinned integration test, so "the host can reach the hub" is verified,
-not assumed.
+A **generic network extractor** baked into the shared ISO via
+`ignitionConfigOverride` (identical for every host, exactly like the baked-in
+callback client) applies it. The unit is ordered **before** the seed pull and the
+callback and:
+
+1. mounts the `DataImage` volume (local virtual media — no network required),
+2. reads the per-host nmstate from it,
+3. runs `nmstatectl apply`,
+4. waits for the link/route to come up, after which preparation proceeds.
+
+This works where `preprovisioningNetworkDataName` / `networkData` do not, for the
+same reason the callback URL/token ride a `DataImage` rather than those surfaces:
+it does **not** ask BMO/Ironic to parse and merge network data for a live-iso boot
+(which they do not) — the baked-in unit mounts the volume and applies the config
+imperatively. The two per-host payloads (nmstate network config and the callback
+URL/token) can therefore share one `DataImage` carrier.
+
+Because the per-host data rides the `DataImage` and only a generic extractor is
+baked in, the **shared ISO is preserved**: there is no DHCP prerequisite and no
+per-host or per-site ISO variant. DHCP is no longer required; where it happens to
+be available the same path still works, but it is not assumed.
+
+This approach has two prerequisites, both called out explicitly:
+
+- **Two simultaneous virtual-media devices.** The live ISO and the `DataImage`
+  must be attached at the same time (BMO performs both attaches over Redfish; see
+  [Component Responsibilities](#component-responsibilities)). This is a BMC/BMO
+  capability prerequisite, validated per environment — if a target BMC exposes
+  only one virtual-media slot, neither the network config nor the callback data
+  can be delivered to a shared ISO.
+- **The network-bearing `DataImage` must be attached before the prep boot** — not
+  only after pre-provisioning, where the config `DataImage` is created today —
+  since the host needs its network up for the seed pull.
+
+The on-ISO layout is assumed to be nmstate (the system's network-data is
+nmstate); if the config `DataImage` renders config-drive `network_data.json`
+instead, the extractor parses that layout — the exact on-disk format is pinned by
+the version-pinned integration test below. That same test exercises the supported
+live-ISO network path end to end, so "the host can configure its network and reach
+the hub" is verified, not assumed. The still-open delivery question (reuse the
+existing config `DataImage` vs. a dedicated network `DataImage`) is tracked in
+[Open Question 2](#open-questions).
 
 #### 2. HTTP Callback Endpoint
 
@@ -1053,12 +1085,11 @@ BMC fetches them *later*, and BMO's `live-iso` path passes only `imageData.URL`
 as the Ironic `boot_iso` while clearing the checksum fields — nothing in the boot
 path re-binds what the BMC pulls. If the content changes after the check, the BMC
 can boot different bytes than were verified. The design therefore **requires
-`ISOURL` to be an immutable, per-run reference** (a per-run URL whose bytes are
-never rewritten), not a mutable "latest" URL. The planned ISO-generation
-workflow must publish to a **unique URL for each generation run**, written
-once and never overwritten. The exact path layout will be defined when ISO
-generation is implemented; the example URLs in this proposal are illustrative.
-Immutability is a **producer-side contract** (a generic webhook
+`ISOURL` to be an immutable, content-addressed reference** (a per-run URL whose
+bytes are never rewritten), not a mutable "latest" URL. The seed-generation
+workflow satisfies this, uploading to a **unique per-run path**
+(ProvisioningRequest name + seed image digest + filename), written once and never
+overwritten. Immutability is a **producer-side contract** (a generic webhook
 cannot prove a URL immutable) that closes the TOCTOU window, while the mandatory
 `ISODigest` pre-fetch confirms identity at check time. A deployment that cannot
 guarantee an immutable, allowlisted URL therefore cannot offer automated IBI
@@ -1290,9 +1321,8 @@ spec:
           resourceSelector:
             resourceselector.clcm.openshift.io/server-type: XR8620t
       ibiPreProvisioning:
-        # Illustrative immutable per-run URL (see "Restricting ISOURL").
-        # The final path layout will be defined during ISO implementation.
-        isoURL: https://iso-server.example.com/ibi/example-generation-run/rhcos-ibi.iso
+        # Immutable, content-addressed per-run URL (see "Restricting ISOURL").
+        isoURL: https://iso-server.example.com/ibi/example-pr/sha256-abc123/rhcos-ibi.iso
         isoDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
         isoServerCACertRef:
           name: iso-server-ca-cert
@@ -1672,6 +1702,14 @@ repository:
     `ignitionConfigOverride`: the `ibi-prep-callback.service` unit, the
     `/usr/local/bin/ibi-prep-callback` script, and the generic callback client.
     Identical for every server, contains no URL/token/attempt.
+  - `GenerateNetworkExtractor() ([]byte, error)` — a second **build-time**,
+    host-independent surface baked into the shared ISO: the generic network
+    extractor unit described in
+    [Per-host network configuration for the live-ISO boot](#per-host-network-configuration-for-the-live-iso-boot).
+    Ordered before the seed pull and the callback, it mounts the `DataImage`,
+    reads the per-host nmstate, and runs `nmstatectl apply`. Identical for every
+    server; the per-host nmstate it consumes is delivered as data on the
+    `DataImage`, never baked in.
   - `GenerateCallbackData(callbackURL, attempt, token string, budget time.Duration) ([]byte, error)`
     — the **per-attempt** surface delivered at boot through the `DataImage`
     carrier: the non-secret `/etc/ibi-callback/env` (`CALLBACK_URL`,
@@ -1808,9 +1846,21 @@ the live environment.
    [Challenge 4](#4-callback-url-injection-into-the-iso)) work on the supported
    BMO/Ironic version?** Must be settled by a version-pinned integration test. The
    DataImage is used **purely as a data device**, never as an ignition overlay
-   (BMO does not merge DataImage contents into live-iso Ignition). If the test
-   cannot pass, the fallback is a unique per-ICI ISO with the URL/token baked
-   directly into `ignitionConfigOverride`, sacrificing ISO reuse.
+   (BMO does not merge DataImage contents into live-iso Ignition). The same
+   carrier delivers the per-host **nmstate network config** that the baked-in
+   extractor applies before the seed pull (see
+   [Per-host network configuration for the live-ISO boot](#per-host-network-configuration-for-the-live-iso-boot));
+   the test must therefore also confirm (a) that two virtual-media devices (live
+   ISO + `DataImage`) attach simultaneously on the target BMC/BMO, and (b) the
+   exact on-ISO network-data layout — raw nmstate vs. config-drive
+   `network_data.json` — so the extractor parses the right format. An open
+   sub-question is whether to **reuse the existing IBI config `DataImage`** or
+   attach a **dedicated network `DataImage`** for the pre-provisioning boot; reuse
+   avoids a second artifact but requires generating/attaching that DataImage
+   earlier in the flow than today. If the carrier test cannot pass, the fallback
+   is a unique per-ICI ISO with the URL/token (and, in DHCP-less environments, the
+   network config) baked directly into `ignitionConfigOverride`, sacrificing ISO
+   reuse.
 
 3. **Should the SiteConfig Operator's IBI templates support the `preProvisioning`
    field natively?** If so, the config flows through ClusterInstance → ICI
