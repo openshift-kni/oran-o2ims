@@ -1017,9 +1017,9 @@ OnboardingServer is deleted directly:
    can change the BMC's address (releasing its static assignment lets the BMC take a new
    DHCP lease). Doing the address-affecting revert last means any **partial** restore
    that fails at (a) or (b) leaves the original static `bmcAddress` intact, so the
-   `needs-bmc-reset` record (keyed by `bmcAddress`) stays reachable for the next
-   request; the networking revert only runs once (a) and (b) have succeeded, i.e. when
-   no reset gate is needed. Restoring the BMC is the controller's responsibility;
+   `needs-bmc-reset` record (keyed by the canonical `bmcAddress`) stays reachable for the
+   next request; the networking revert only runs once (a) and (b) have succeeded, i.e.
+   when no reset gate is needed. Restoring the BMC is the controller's responsibility;
    failures are recorded (`cleanupStatus: partial`, with the reason and the step that
    failed) but do not wedge teardown.
 4. **Delete the BMH** and the per-server ExternalSecret/Secret, then remove the
@@ -1382,39 +1382,25 @@ request for the same BMC** re-onboard without the required reset. The partial ou
 therefore persisted to a resource that **outlives both the OnboardingServer and the
 OnboardingRequest**: a per-BMC **`needs-bmc-reset` record** (a small operator-owned CR —
 or a ConfigMap — in the operator namespace, carrying the attempted restore step). The
-**gate is checked before any BMC I/O**, so it must key on something known **without
-inspecting** the host. The only pre-inspection identifier is the **`bmcAddress`** from
-`spec.servers[]`, so that is the **authoritative gate key** (the record also stores the
-BMC management NIC MAC, learned during the earlier onboarding's inspection, but only as a
-**secondary correlation attribute** — the MAC is not available before inspection, so it
-cannot serve the pre-inspection check). Keying on `bmcAddress` is sound here because the
-design keeps the address **stable for as long as a gate exists**: the DHCP→static pin
-reverts to the **same leased IP** (backed by the durable per-MAC reservation / IPAM
-exclusion that is a BMC networking prerequisite), and the restore order above reverts
-networking **last**, so a partial restore that fails at an earlier step never reaches the
-address-affecting revert. Thus whenever a `needs-bmc-reset` record is written, the BMC
-still answers at the same `bmcAddress` a later request will use, and the pre-inspection
-check matches. The request finalizer must **write this record before it removes the
-request's finalizer**, so a partial restore is never dropped by request deletion.
-**Before onboarding any server** — on first onboarding and on every retry/recreate,
-regardless of which request owns it — the controller **checks for a `needs-bmc-reset`
-record matching the server's `bmcAddress`**; if one is present it holds the server in a
-`Blocked`/`NeedsBmcReset` state and does **not** proceed.
+record is **keyed by `bmcAddress` in RFC 5952 canonical form** — the same
+canonicalization the CR/BMH names use (so equivalent IPv6 spellings resolve to one key),
+and the only identifier available before the controller talks to the BMC. The request
+finalizer **writes the record before removing the request's finalizer**, so a partial
+restore is never dropped by request deletion. **Before onboarding any server** — on first
+onboarding and on every retry/recreate, regardless of which request owns it — the
+controller **checks for a `needs-bmc-reset` record matching the server's canonical
+`bmcAddress`**; if one is present it holds the server in a `Blocked`/`NeedsBmcReset` state
+and does **not** proceed. The operator resets the BMC out of band (reset credentials /
+disable LDAP) and **deletes the record** to confirm; only then does onboarding proceed.
+This keeps a partial restore from silently re-onboarding without the required reset,
+across request deletion and re-creation.
 
-**Changed-address edge (unsupported configuration).** If the durable per-MAC reservation
-prerequisite is **not** satisfied and the BMC's address nonetheless changes, a new
-request arriving with the new `bmcAddress` will **not** match the old record
-pre-inspection — the "regardless of which request owns it" guarantee holds only for the
-supported, stable-address configuration. This case still **fails safe**: the BMC retains
-non-default credentials from the partial restore, so onboarding cannot authenticate and
-stops at `AuthFailed` rather than completing into a bad state. The MAC recorded on the
-record lets the operator correlate that `AuthFailed` with the earlier partial restore
-(the MAC becomes available once inspection is attempted).
-
-In the supported case, while the gate is set the operator resets the BMC out of band
-(reset credentials / disable LDAP — the same action the `AuthFailed` guidance describes)
-and **deletes the record** to confirm; only then does onboarding proceed. This keeps a partial restore from silently looping into
-`AuthFailed`, even across request deletion and re-creation.
+Keying on `bmcAddress` relies on the address being **stable** (the supported
+configuration: the DHCP→static pin reuses the same leased IP, backed by the durable
+per-MAC reservation prerequisite, and restore reverts networking last). The gate does not
+attempt to track a BMC whose address changes out from under it — that is outside the
+supported configuration and is an operator-recoverable condition, not a case the design
+tries to gate.
 
 Fix the root cause first — bad default-credentials/vault entry (`AuthFailed`), wrong
 hardware model (`VendorMismatch` / `HwMismatch`), or vault/ESO connectivity
