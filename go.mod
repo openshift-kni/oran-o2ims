@@ -19,7 +19,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/metal3-io/baremetal-operator/apis v0.14.2
+	github.com/metal3-io/baremetal-operator/apis v0.14.3
 	github.com/oapi-codegen/nethttp-middleware v1.3.1
 	github.com/oapi-codegen/nullable v1.2.0
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.2
