@@ -2,7 +2,7 @@
 
 ```yaml
 title: o2ims-v13
-version: "3.6"
+version: "3.7"
 authors:
   - @rauherna
 reviewers:
@@ -10,7 +10,7 @@ reviewers:
 approvers:
   - TBD
 creation-date: 2026-09-21
-last-updated: 2026-10-30
+last-updated: 2026-11-23
 change-history: "#appendix-b-document-version-history"
 ```
 
@@ -48,14 +48,17 @@ Inventory, Provisioning, and Monitoring (alarms).
 
 **Key finding**: Inventory and Provisioning are already ~95–100% aligned with v13
 thanks to the v11 PRs (#2187, #2322, #2369), which implemented draft CRs later
-ratified in v13. **Monitoring/Alarms is the main work area**, requiring new endpoints,
-data model changes, and a major API version bump (v1 → v2).
+ratified in v13. **Monitoring/Alarms was the main work area** — its non-breaking
+additions and the v1 → v2 breaking cutover have since merged
+([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179)), reaching API
+v2.2.0. The remaining monitoring work is Purge Alarms + Task Operations
+(M-11–M-13) and `probableCauseId` population (M-14); see [§5.2](#52-gap-assessment).
 
 | Interface | Current API | v13 API |
 |-----------|-------------|---------|
 | Inventory | 2.0.0 | 2.0.0 |
 | Provisioning | 1.2.0 | 1.2.0 |
-| Monitoring | ~1.1.0 | 2.2.0 |
+| Monitoring | 2.2.0 | 2.2.0 |
 
 ---
 
@@ -141,8 +144,11 @@ and ResourceProvisioningPhase enum). Only documentation-level update remains.
 | 2.1.0 | Incremental updates |
 | **2.2.0** | **New: Alarm Subscription Update (PATCH). Updated: AlarmSubscriptionInfo** |
 
-Our current implementation references R003-v06.00 (June 2024) and is at roughly
-API v1.1.0 level. We need to reach v2.2.0.
+Our implementation now references v13 and is at API v2.2.0: the non-breaking
+additions (M-1, M-2, M-4, M-6–M-10) and the v1 → v2 breaking cutover (M-7)
+merged in [#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179). M-3
+(PATCH) landed without ETag support, and M-5 emits a root-relative `objectRef`
+(documented interoperability limitation). The still-open items are M-11–M-14.
 
 ### 5.2 Gap Assessment
 
@@ -163,22 +169,29 @@ API v1.1.0 level. We need to reach v2.2.0.
 >   endpoints in the inventory API are just the catalog of "what can be measured,"
 >   independent of the actual measurement delivery.
 
-| # | Requirement | Since | Current | Action | Breaking? |
-|---|-------------|-------|---------|--------|-----------|
-| M-1 | `objectClass` on AlarmEventRecord | 2.0.0 | Not implemented | See [AlarmEventRecord](#alarmeventrecord), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (when mandatory) |
-| M-2 | `eventFilter` on AlarmSubscriptionInfo | 2.2.0 (v13) | Uses `filter` enum | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
-| M-3 | PATCH `/alarmSubscriptions/{id}` | 2.2.0 (v13) | Not implemented | See [Missing Endpoints](#missing-endpoints), [AlarmSubscriptionUpdate](#alarmsubscriptionupdate-new-type) | No |
-| M-4 | `objectClass` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-5 | `objectRef` on Alarm Change Notification | 2.0.0 | Not implemented | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-6 | `consumerSubscriptionId` in notification | 2.0.0 | Not in payload | See [Alarm Change Notification](#alarm-change-notification) | No |
-| M-7 | API URL path v1 → v2 | 2.0.0 | Currently `/v1/` | Change to `/v2/`. See [Version Management](#version-management-m-7) | **Yes** |
-| M-8 | OpenAPI spec references v13 | v13 | References R003-v06.00 | Update `info` block | No |
-| M-9 | JSON field naming (5 fields) | 2.0.0 | Wrong names/casing | See [AlarmEventRecord](#alarmeventrecord), [Alarm Change Notification](#alarm-change-notification), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (v2 wire format) |
-| M-10 | `consumerSubscriptionId` UUID→String | Inherited | UUID-only | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
-| M-11 | `POST /alarms/purge` (Purge Alarms Task) | 1.2.0 | Not implemented | New async endpoint. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No (additive) |
-| M-12 | `GET /taskOperations`, `GET /taskOperations/{id}` | 1.2.0 | Not implemented | New endpoints backing async purge. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No (additive) |
-| M-13 | Purge suppression (no resurrection of acked-active alarms) | impl | N/A | New DB state + sync-path guard. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No |
-| M-14 | `probableCauseId` populated on AlarmEventRecord | 1.0.0 | Unpopulated | Alert-name mapping table → `indeterminate` fallback; also builds dictionary `probableCauses`. See [probableCauseId Population](#probablecauseid-population-m-14) | No (additive) |
+> **Status (post-[#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179)):**
+> M-1, M-2, M-4, M-6–M-10 are implemented and merged; the alarms spec is now at
+> v2.2.0 under the `/v2/` path. M-3 (PATCH) is implemented **without ETag
+> support**, and M-5 emits a **root-relative `objectRef`** (a documented
+> interoperability limitation). Only M-11–M-14 remain open. The design subsections
+> referenced below are retained for historical context on the merged work.
+
+| # | Requirement | Since | Status | Notes | Breaking? |
+|---|-------------|-------|--------|-------|-----------|
+| M-1 | `objectClass` on AlarmEventRecord | 2.0.0 | ✅ Done (#5179) | See [AlarmEventRecord](#alarmeventrecord), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (when mandatory) |
+| M-2 | `eventFilter` on AlarmSubscriptionInfo | 2.2.0 (v13) | ✅ Done (#5179) | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
+| M-3 | PATCH `/alarmSubscriptions/{id}` | 2.2.0 (v13) | ✅ Done (#5179), **no ETag** | Conditional updates (ETag / If-Match / 412) not supported. See [Missing Endpoints](#missing-endpoints), [AlarmSubscriptionUpdate](#alarmsubscriptionupdate-new-type) | No |
+| M-4 | `objectClass` on Alarm Change Notification | 2.0.0 | ✅ Done (#5179) | See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-5 | `objectRef` on Alarm Change Notification | 2.0.0 | ✅ Done (#5179), **root-relative** | Emitted as a root-relative path; absolute URL requires a public base URL — documented interoperability limitation. See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-6 | `consumerSubscriptionId` in notification | 2.0.0 | ✅ Done (#5179) | See [Alarm Change Notification](#alarm-change-notification) | No |
+| M-7 | API URL path v1 → v2 | 2.0.0 | ✅ Done (#5179) | Now `/v2/`. See [Version Management](#version-management-m-7) | **Yes** |
+| M-8 | OpenAPI spec references v13 | v13 | ✅ Done (#5179) | `info` block at v2.2.0 | No |
+| M-9 | JSON field naming (5 fields) | 2.0.0 | ✅ Done (#5179) | See [AlarmEventRecord](#alarmeventrecord), [Alarm Change Notification](#alarm-change-notification), [DB: alarm_event_record](#db-schema-alarm_event_record-m-1-m-9) | Yes (v2 wire format) |
+| M-10 | `consumerSubscriptionId` UUID→String | Inherited | ✅ Done (#5179) | See [AlarmSubscriptionInfo](#alarmsubscriptioninfo), [DB: alarm_subscription_info](#db-schema-alarm_subscription_info-m-2-m-10) | No |
+| M-11 | `POST /alarms/purge` (Purge Alarms Task) | 1.2.0 | ⬜ Open | New async endpoint. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No (additive) |
+| M-12 | `GET /taskOperations`, `GET /taskOperations/{id}` | 1.2.0 | ⬜ Open | New endpoints backing async purge. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No (additive) |
+| M-13 | Purge suppression (no resurrection of acked-active alarms) | impl | ⬜ Open | New DB state + sync-path guard. See [Purge Alarms + Task Operations](#purge-alarms--task-operations-m-11-m-12-m-13) | No |
+| M-14 | `probableCauseId` populated on AlarmEventRecord | 1.0.0 | ⬜ Open (unpopulated) | Alert-name mapping table → `indeterminate` fallback; also builds dictionary `probableCauses`. See [probableCauseId Population](#probablecauseid-population-m-14) | No (additive) |
 
 #### Missing Endpoints
 
@@ -515,7 +528,7 @@ owns alarm mutations via `PatchAlarm`):
 ```yaml
 # config/rbac/oran_o2ims_user_roles.yaml — maintainer-role
 - nonResourceURLs:
-  - /O2ims_infrastructureMonitoring/v1/alarms/purge
+  - /O2ims_infrastructureMonitoring/v2/alarms/purge
   verbs:
   - create
 ```
@@ -540,8 +553,11 @@ Associated changes: `GET /alarms` and `GET /alarms/{id}` filter `purged = false`
 the upsert `DoUpdate` SET list must **not** reset `purged`; the
 `manage_alarm_event` BEFORE trigger suppresses the outbox when `NEW.purged`.
 
-**`task_operation`** — new baseline file `000005_create_task_operation_table`
-(a new table is its own baseline, not an incremental migration):
+**`task_operation`** — add to the existing
+`000002_create_alarm_event_record_table` baseline in place, alongside the
+soft-purge columns above (per AGENTS.md: modify existing baselines, do not add a
+new numbered migration file). Put the `CREATE TABLE` and its index in the
+`000002` up file and the matching `DROP TABLE` in the `000002` down file:
 
 ```sql
 CREATE TABLE IF NOT EXISTS task_operation (
@@ -625,7 +641,7 @@ are handled in the OpenAPI spec and serialization layer, not the schema.
 | `internal/service/alarms/cmd/serve.go` | Update base path if hardcoded | [M-7](#52-gap-assessment) |
 | `internal/service/alarms/api/openapi.yaml` | Add `/alarms/purge`, `/taskOperations[/{id}]` paths; `PurgeRequest`, `TaskOperationInfo` schemas; `405` for unsupported methods | [M-11](#52-gap-assessment), [M-12](#52-gap-assessment) |
 | `internal/service/alarms/internal/db/migrations/000002_*` | Add `purged`, `purged_at` columns; suppress outbox when purged in `manage_alarm_event` | [M-13](#52-gap-assessment) |
-| `internal/service/alarms/internal/db/migrations/000005_create_task_operation_table*` | New baseline table + `one_active_purge` partial unique index | [M-11](#52-gap-assessment), [M-12](#52-gap-assessment) |
+| `internal/service/alarms/internal/db/migrations/000002_*` | Add `task_operation` table + `one_active_purge` partial unique index to the existing baseline (up); matching `DROP TABLE` in down | [M-11](#52-gap-assessment), [M-12](#52-gap-assessment) |
 | `internal/service/alarms/internal/db/models/` | New `TaskOperation` model; `Purged`/`PurgedAt` on `AlarmEventRecord` | [M-11](#52-gap-assessment), [M-13](#52-gap-assessment) |
 | `internal/service/alarms/internal/db/repo/` | `PurgeAlarmEventRecords` (hybrid delete/soft-purge, eligibility predicate); task CRUD + state transitions; regenerate mock | [M-11](#52-gap-assessment), [M-12](#52-gap-assessment), [M-13](#52-gap-assessment) |
 | `internal/service/alarms/internal/db/repo/alarms_repository.go` | Exclude `purged` from `GetAlarmEventRecords`/`GetAlarmEventRecord`; do not reset `purged` in upsert `DoUpdate` | [M-13](#52-gap-assessment) |
@@ -645,9 +661,11 @@ are handled in the OpenAPI spec and serialization layer, not the schema.
 
 ### Overview
 
-This feature is implemented in three phases to minimize disruption. Each phase
-is delivered as a single, self-contained pull request containing only the logic
-for that phase (3 PRs in total).
+This feature is delivered as a sequence of self-contained pull requests to
+minimize disruption, each containing only the logic for that phase. PRs 1–3
+(Inventory/Provisioning alignment and the Monitoring non-breaking + v2 breaking
+changes) have merged; PR 4 (Purge + Task Operations) and PR 5 (`probableCauseId`
+population) remain open.
 
 No v13 changes are **GitOps-breaking** — there are no new CRDs or user-facing
 configuration changes. All breaking changes are **REST API consumer-facing**
@@ -655,14 +673,15 @@ configuration changes. All breaking changes are **REST API consumer-facing**
 
 ### PR Summary
 
-| PR | Title | Type | Interface |
-|----|-------|------|-----------|
-| PR 1 | Inventory + Provisioning spec alignment | Non-breaking | Inventory, Provisioning |
-| PR 2 | Monitoring non-breaking additions | Non-breaking | Monitoring |
-| PR 3 | Monitoring v2 breaking changes | Breaking (API consumers) | Monitoring |
-| PR 4 | Purge Alarms + Task Operations | Non-breaking (additive endpoints) | Monitoring |
+| PR | Title | Type | Interface | Status |
+|----|-------|------|-----------|--------|
+| PR 1 | Inventory + Provisioning spec alignment | Non-breaking | Inventory, Provisioning | ✅ Merged |
+| PR 2 | Monitoring non-breaking additions | Non-breaking | Monitoring | ✅ Merged ([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179)) |
+| PR 3 | Monitoring v2 breaking changes | Breaking (API consumers) | Monitoring | ✅ Merged ([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179)) |
+| PR 4 | Purge Alarms + Task Operations | Non-breaking (additive endpoints) | Monitoring | ⬜ Open (M-11–M-13) |
+| PR 5 | `probableCauseId` population | Non-breaking (additive) | Monitoring, Inventory | ⬜ Open (M-14) |
 
-### PR 1: Inventory + Provisioning Spec Alignment
+### PR 1: Inventory + Provisioning Spec Alignment ✅ Merged
 
 | Item | Change |
 |------|--------|
@@ -670,22 +689,24 @@ configuration changes. All breaking changes are **REST API consumer-facing**
 | Deprecated-field deviation | Document in inventory docs that legacy 1.x fields are absent |
 | User-guide docs | Update `inventory-api.md` and `cluster-provisioning.md` |
 
-### PR 2: Monitoring Non-Breaking Additions
+### PR 2: Monitoring Non-Breaking Additions ✅ Merged ([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179))
 
-Add new fields and endpoints while keeping the v1 API path:
+Added new fields and endpoints while keeping the v1 API path:
 
 | Item | Change |
 |------|--------|
 | `objectClass` on AlarmEventRecord | Add as optional initially (verify population logic before making mandatory) |
 | `eventFilter` on AlarmSubscriptionInfo | Add `eventFilter` alongside existing `filter` (non-breaking) |
 | `consumerSubscriptionId` type | Change from UUID to String |
-| PATCH `/alarmSubscriptions/{id}` | New method + `AlarmSubscriptionUpdate` type |
-| Alarm Change Notification | Add `objectRef`, `objectClass`, `consumerSubscriptionId` |
-| `probableCauseId` population | Build dictionary `probableCauses` from an embedded alert-name mapping table (→ `indeterminate` fallback); populate record `probableCauseId` (M-14, I-3) |
+| PATCH `/alarmSubscriptions/{id}` | New method + `AlarmSubscriptionUpdate` type (shipped without ETag / 412 conditional-update support) |
+| Alarm Change Notification | Add `objectRef` (root-relative), `objectClass`, `consumerSubscriptionId` |
 | DB migrations | New columns (`object_class`, `event_filter`) |
 | Test coverage | Unit, envtest, server tests for all new endpoints and fields |
 
-### PR 3: Monitoring v2 Breaking Changes
+> **Note:** `probableCauseId` population (M-14, I-3) was originally scoped here
+> but did **not** ship with the merged PR 2; it is now tracked as its own PR 5.
+
+### PR 3: Monitoring v2 Breaking Changes ✅ Merged ([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179))
 
 | Item | Change |
 |------|--------|
@@ -706,7 +727,7 @@ resources under the current (v2) monitoring path:
 | Item | Change |
 |------|--------|
 | OpenAPI | Add `/alarms/purge` (POST), `/taskOperations` (GET), `/taskOperations/{id}` (GET); `PurgeRequest` + `TaskOperationInfo` schemas; `405` for all other methods |
-| DB migrations | `purged`/`purged_at` on `alarm_event_record` (000002 baseline); new `task_operation` table + `one_active_purge` index (000005) |
+| DB migrations | `purged`/`purged_at` on `alarm_event_record` plus the new `task_operation` table + `one_active_purge` index, all folded into the existing `000002` baseline (up + down), per AGENTS.md |
 | Repo | `PurgeAlarmEventRecords` (hybrid hard-delete inactive / soft-purge acked-active; eligibility predicate per 3.7.13); task CRUD + state transitions |
 | Server | `PurgeAlarms` (202 + Location, 409 conflict, validation), `GetTaskOperations`, `GetTaskOperation`; background worker under advisory lock |
 | Sync path | Exclude `purged` rows from Alarm List; preserve `purged` across upsert; suppress outbox for purged rows |
@@ -808,6 +829,7 @@ resources under the current (v2) monitoring path:
 | 3.4 | CodeRabbit 3rd review (PR 5196) | M-14 in the append-only model: records store `alarm_dictionary_id` (resolution + prune of the non-invertible id); reserved fallback dictionary holds `indeterminate`; backfill moved to a new migration that seeds it first. |
 | 3.5 | Pivot M-14 to code-only id (PR 5196) | Code-only `probableCauseId = UUIDv5(ns, code)`; `indeterminate` a reserved code in every dictionary. Retires the (impossible, resource-scoped) reserved fallback dictionary, the record dict-id column, revisions, pruning, and backfill. |
 | 3.6 | M-14 resolution contract (PR 5196) | Clarify resolution: append-only probable-cause catalog is the authoritative source (codes never removed/repurposed) so historical ids stay resolvable; `indeterminate` is a documented global built-in resolvable without a dictionary. No new machinery. |
+| 3.7 | Sync status with merged v13 work (PR 5196) | Address @rauherna review: (1) refresh §5.2 — M-1/M-2/M-4/M-6–M-10 merged in [#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179) (API now v2.2.0, `/v2/` path), M-3 shipped without ETag, M-5 emits root-relative `objectRef`, only M-11–M-14 open; mark PRs 1–3 merged and split M-14 into PR 5. (2) Appendix C targets `/v2/` directly (PR 3 cutover merged). (3) Fold the `task_operation` table + `one_active_purge` index into the existing `000002` baseline per AGENTS.md (drop the `000005` migration). |
 
 ---
 
@@ -816,8 +838,9 @@ resources under the current (v2) monitoring path:
 Draft additions for `internal/service/alarms/api/openapi.yaml`, to be applied
 when PR 4 is implemented (followed by `make go-generate`). Conventions match the
 existing file: shared parameter `$ref`s, `ProblemDetails` error bodies, and
-role-based `security`. The `v1` prefix matches the current file; if PR 4 lands
-after the PR 3 `v1`→`v2` bump, these paths become `/v2/`.
+role-based `security`. The paths use the `/v2/` prefix: PR 3's `v1`→`v2` cutover
+([#5179](https://github.com/openshift-kni/oran-o2ims/pull/5179)) has merged, so
+`/v2/` is the current monitoring path.
 
 **Design notes:**
 
@@ -833,7 +856,7 @@ after the PR 3 `v1`→`v2` bump, these paths become `/v2/`.
 **Paths** (add under `paths:`):
 
 ```yaml
-  /O2ims_infrastructureMonitoring/v1/alarms/purge:
+  /O2ims_infrastructureMonitoring/v2/alarms/purge:
     post:
       operationId: PurgeAlarms
       summary: Request an asynchronous purge of alarm records
@@ -896,7 +919,7 @@ after the PR 3 `v1`→`v2` bump, these paths become `/v2/`.
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/taskOperations:
+  /O2ims_infrastructureMonitoring/v2/taskOperations:
     get:
       operationId: GetTaskOperations
       summary: Retrieve the list of task operation occurrences
@@ -945,7 +968,7 @@ after the PR 3 `v1`→`v2` bump, these paths become `/v2/`.
               schema:
                 $ref: '../../common/api/openapi.yaml#/components/schemas/ProblemDetails'
 
-  /O2ims_infrastructureMonitoring/v1/taskOperations/{operationOccurrenceId}:
+  /O2ims_infrastructureMonitoring/v2/taskOperations/{operationOccurrenceId}:
     get:
       operationId: GetTaskOperation
       summary: Retrieve exactly one task operation occurrence
