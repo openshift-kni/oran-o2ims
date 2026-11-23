@@ -6,6 +6,21 @@ SPDX-License-Identifier: Apache-2.0
 
 # Proposal: Metal3 configuration delivery for IBI pre-provisioning
 
+## Overview
+
+The request to Metal3 is to **boot a live ISO with a secondary configuration
+data ISO mounted at the same time**. Both images must be attached before the
+first power-on so that the live environment can read its configuration as it
+starts. This allows multiple servers to share one boot ISO while receiving
+their own configuration, without rebuilding the boot ISO for each server.
+
+For automated IBI pre-provisioning, Metal3 would coordinate attachment of
+both images, report a failure before power-on if the required configuration
+cannot be attached, and provide reliable attachment status and cleanup. The
+sections below describe how existing BMO and Ironic functionality can support
+this capability, what the prototype demonstrated, and the lifecycle work
+still needed for production use.
+
 ## Summary
 
 Extend the existing Metal3 live-ISO provisioning path so that a separate
