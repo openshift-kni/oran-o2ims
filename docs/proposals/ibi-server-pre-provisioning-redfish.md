@@ -52,10 +52,14 @@ configdrive for live-ISO deployment. See [BMO's attachment gate][bmo-power] and
 
 One approach is to extend BMO to pass the configuration ISO into Ironic's
 existing pre-power-on configdrive hook and adjust Ironic's media selection to
-preserve both images. A local prototype of that approach has been prepared,
-but it adds cross-project review, release and delivery dependencies. This
-proposal considers performing those media and power operations within IBI-O
-instead.
+preserve both images. A prototype passed the first cold-boot media-delivery
+checkpoint on the tested iDRAC on November 23, 2026; see the
+[Metal3 configuration-media proposal](https://github.com/openshift-kni/oran-o2ims/pull/5477).
+That result applies to the BMO/Ironic extension, while control transfer,
+preparation and handoff remain acceptance gates for this direct Redfish
+alternative. The extension adds cross-project review, release and delivery
+dependencies; this proposal considers performing those media and power
+operations within IBI-O instead.
 
 ### What has been demonstrated
 
@@ -102,7 +106,7 @@ Out of scope:
 
 | Component | Responsibility |
 | --- | --- |
-| O-Cloud Manager | Validate template-owned preparation inputs, allocate hardware, populate the ICI through SiteConfig and report ICI progress through ProvisioningRequest status. |
+| O-Cloud Manager | Validate preparation inputs, allocate hardware, populate the ICI through SiteConfig and report progress. On deletion, cancel preparation and wait for cleanup/release acknowledgement before deleting the allocation. |
 | SiteConfig | Render the BMH, ICI and supporting resources while preserving the agreed preparation and control-transfer metadata. |
 | IBI-O | Own the preparation attempt, acquire BMC control, publish configuration media, perform Redfish operations, accept completion, clean up and hand control back. |
 | BMO/Ironic | Finish existing work, acknowledge detachment, and resume normal management after IBI-O releases the host. They do not mount preparation media in this design. |
@@ -163,9 +167,12 @@ side effect needs a persisted intent, observed result and restart behaviour.
 
 ### 1. Gate normal installation and validate the target
 
-When preparation is enabled, branch into the new workflow before the existing
-host-validation and startup code can set `externallyProvisioned`, set
-`online=true`, add the managed annotation or start cluster monitoring.
+Enter preparation handling when it is requested **or a persisted attempt is
+active**, before the existing host-validation and startup code can set
+`externallyProvisioned`, set `online=true`, add the managed annotation or
+start cluster monitoring. Acquiring control, cleanup and handoff are active
+attempt states. Clearing a spec field must not bypass that gate while an
+attempt still owns or is releasing the host.
 Preparation success must not set the ICI's overall installation-completed
 condition or the existing `status.bootTime`; those belong to the later cluster
 configuration stage. See the [existing reconcile order][ibi-reconcile].
@@ -192,6 +199,29 @@ addresses. A Kubernetes Lease or equivalent persisted claim is a candidate;
 its exact representation is a design decision to settle before implementation.
 Lease expiry alone must not authorize a new installation while an earlier
 attempt may still be running.
+
+Before requesting detachment, persist a snapshot of the ICI UID, attempt ID,
+BMH name/namespace/UID, selected BMC/System identity, live ISO URL/digest,
+preparation inputs and credential references. Keep secret values in Secrets.
+Drive reconciliation and cleanup from that snapshot until the attempt has
+completed or acknowledged cancellation and released control. Re-read resource
+identities to detect replacement; do not retarget a claimed attempt using a
+new BMH or ICI spec.
+
+The existing [ICI update webhook][ibi-update-validation] freezes most spec
+fields only after `status.bareMetalHostRef` is set by normal startup. Extend
+validation to reject preparation-input and target changes once the preparation
+attempt is claimed, including removing or disabling preparation while that
+attempt is active. Keep safe metadata updates allowed, and constrain the
+existing `spec.clusterMetadata` exemption so it cannot alter claimed inputs.
+Use an explicit cancellation intent for cancellation, and keep the preparation
+gate active through cleanup; unsetting preparation is not a request to start
+normal installation. Do not set normal-installation status early merely to
+activate the old webhook guard.
+
+Retain the input guard through handoff and the transition to normal startup;
+a preparation success result must never authorize an edited target or a
+different set of preparation inputs during that transition.
 
 ### 2. Acquire control from BMO/Ironic
 
@@ -229,15 +259,24 @@ ejection before handing back control. Do not fabricate its attachment status.
 
 ### 4. Mount both images and boot the server
 
-Use the BMC address, System selection and credentials referenced by the BMH.
-Verify the physical identity and confirm power-off through Redfish before
-changing media or boot selection.
+Use the BMC address, System selection and credential references recorded when
+claiming the BMH. Revalidate its UID and the physical identity. Complete
+the [ISO artifact checks](#live-iso-artifact-validation) and media inventory
+before changing power state, media or boot selection.
 
 Discover VirtualMedia resources and their advertised actions and capabilities.
-Select two independently usable devices, preserving unrelated mounted media.
-Do not assume fixed iDRAC resource paths or count System and Manager aliases as
-independent devices. If two usable devices cannot be established, fail before
-power-on with a specific unsupported-capability result.
+Reject unrelated inserted media before preparation, even if two other devices
+are free. Do not eject that media to make preflight pass. This conservative
+policy covers the complete workflow: the later stock Ironic path used for the
+final configuration DataImage [ejects matching media before insertion][ironic-insertion],
+so preserving an unrelated ISO during direct preparation alone would not
+protect it through handoff.
+
+Select two independently usable, empty devices. Do not assume fixed iDRAC
+resource paths or count System and Manager aliases as independent devices. If
+two usable devices cannot be established, fail before power-on with a specific
+unsupported-capability result. Once preflight passes, confirm power-off through
+Redfish before inserting media or changing boot selection.
 
 Mount the live ISO and preparation ISO using the selected resources. Wait for
 asynchronous operations and verify that both images are inserted; a successful
@@ -290,6 +329,11 @@ preparation DataImage must be gone before the final configuration DataImage is
 created: existing IBI-O reuses an existing DataImage without changing its URL.
 See [DataImage creation/reuse][ibi-dataimage].
 
+Repeat the media inventory before releasing control. If unrelated media has
+appeared during the attempt, preserve it, retain the claim and detachment,
+and report blocked handoff for resolution. Do not allow normal Ironic media
+attachment to remove it indirectly. A restart must apply this same check.
+
 ### 7. Release control and resume normal IBI installation
 
 Persist a handoff-pending state after successful preparation and cleanup, then
@@ -312,11 +356,58 @@ endpoint working from a hub pod or administrator workstation does not establish
 that it works from the BMC.
 
 The live ISO can use the existing published HTTPS artifact if the BMC can
-retrieve it. The preparation ISO needs a BMC-reachable endpoint: the current
-IBI-O image URL uses a cluster-internal `.svc` hostname. A Route, externally
+retrieve it and the artifact validation below passes. The preparation ISO needs
+a BMC-reachable endpoint: the current IBI-O image URL uses a cluster-internal
+`.svc` hostname. A Route, externally
 reachable service or separately designed media proxy is required. Do not rely
 on Ironic's private filesystem or APIs to serve it. See
 [current IBI-O URL construction][ibi-service-url].
+
+### Live ISO artifact validation
+
+Retain the original proposal's
+[artifact-binding and origin requirements](./ibi-server-pre-provisioning.md#3-bmh-image-configuration-for-iso-boot)
+for the direct Redfish path. For a new preparation attempt, complete these
+checks before any media insertion or power mutation:
+
+* Require `isoDigest` for automated boot and validate the ISO URL against an
+  operator-controlled origin allowlist before fetching any bytes. A request
+  or template must not be able to widen that allowlist.
+* Fetch the actual ISO bytes over HTTPS, using the configured ISO-server CA
+  or system roots, and compare their SHA-256 to the claimed `isoDigest`.
+  A matching checksum sidecar is not a substitute for hashing the ISO bytes.
+* Reject redirects and require a direct artifact URL. Reject digest mismatch,
+  missing digest, disallowed origin and failed TLS validation before inserting
+  either ISO or issuing a power operation.
+* Require an immutable per-generation URL on the approved origin. Its bytes
+  must remain unchanged and available while the BMC can fetch or retry them.
+
+Persist the verified URL/digest with the claimed attempt. The BMC downloads
+the image later, so a successful pre-fetch alone does not bind those later
+bytes. Immutability is a producer/publication contract, not something a generic
+webhook can prove from a URL string. Environments unable to provide that
+contract cannot enable this direct-boot path; do not downgrade to URL-only
+trust after a successful hash check.
+Cancellation and cleanup use the persisted attempt and must not require the
+ISO origin to remain reachable or pass another verification fetch.
+
+### Preparation-only BMC endpoint
+
+Expose only preparation-owned media through the new BMC-facing endpoint.
+The existing [IBI-O image handler][ibi-image-handler] serves `/images/` without
+request authentication; those final cluster configuration ISOs can contain
+credentials. Exposing the whole image service through a new Route would also
+expose that unrelated content.
+
+Use a separate listener registering only preparation-media handlers and expose
+it through its own Service, or use an HTTPS endpoint with an enforced path
+restriction that exposes only the preparation prefix. A second Service pointing
+to the existing unrestricted listener would not establish that boundary. The
+restriction must hold with the selected TLS and routing configuration; a URL
+naming convention is insufficient. A preparation download credential must not
+authorize access to final configuration media. Verify that `/images/` cannot
+be fetched through the new BMC-facing endpoint, including during and after
+handoff.
 
 The preparation payload contains an attempt credential and possibly sensitive
 network configuration. Its download authorization must be scoped, bounded in
@@ -352,6 +443,8 @@ blocking reconcile.
 | Installation fails or its callback times out | Report the distinction, invalidate the old result credential, power off and clean up owned media before retrying. A missing callback does not prove the installer stopped. |
 | Callback arrives after cancellation/retry | Reject the retired attempt's result. Keep duplicate results for the current attempt idempotent. |
 | Cleanup or BMC access fails | Keep ownership recorded, report the blocked cleanup and retry. Do not declare the host ready or start another attempt. |
+| Claimed ICI target or preparation spec is edited | Reject the change. Reconcile the recorded attempt until completion or acknowledged cancellation and release; do not enter normal startup from the edited spec. |
+| ProvisioningRequest is deleted during preparation | Persist cancellation, block new attempts and retain the NAR/allocation until IBI-O acknowledges cleanup and release for the affected attempt. |
 | ICI is deleted during preparation | Stop normal progress and use an explicit finalizer to quiesce the attempt, clean up and release the host. Surface failures without silently abandoning the pause/detachment or ownership claim. |
 | Deletion occurs after handoff | Use existing IBI-O cleanup; the preparation path must not retake BMC control. |
 
@@ -373,16 +466,50 @@ allowed to remove the normal DataImage, reattach the BMH or request a reboot.
 The two cleanup paths must not run independently while preparation still owns
 the BMC.
 
+### Parent deletion must wait before releasing allocation
+
+An ICI finalizer alone cannot enforce this ordering. O-Cloud Manager's
+[ProvisioningRequest deletion path][pr-deletion-order] deletes the
+NodeAllocationRequest (NAR) before the ClusterInstance. NAR/AllocatedNode
+cleanup can therefore [remove allocation labels and change BMH cleaning and
+power settings][hardware-release] before ICI deletion reaches IBI-O.
+Detachment does not protect those Kubernetes fields or reserve the allocation.
+
+Add a preparation-cancellation barrier in `handleProvisioningRequestDeletion`
+before deleting the NAR:
+
+1. Persist cancellation intent for the associated ICI/attempt and prevent new
+   preparation attempts for the deleting request. Cancellation must remain
+   effective across parent and IBI-O restarts and must not depend on disabling
+   preparation in the ICI spec.
+2. IBI-O uses the recorded target to invalidate the attempt's callback
+   credential, quiesce installation, power off, remove owned media, clear its
+   boot override and release BMC control. Keep unrelated media protected by
+   the handoff checks above.
+3. Persist an acknowledgement tied to the ICI UID and affected attempt,
+   confirming cleanup and release. An absent callback, expired Lease, missing
+   pod or empty attempt status is not sufficient evidence. Cancellation must
+   also prevent a late reconcile from claiming or restarting preparation.
+4. Only after that acknowledgement may O-Cloud Manager continue its existing
+   NAR-first deletion sequence. It must retain allocation and report blocked
+   cleanup while IBI-O cannot safely release the host.
+
+Define the cancellation and acknowledgement API with IBI-O and SiteConfig
+so normal rendering cannot overwrite the intent. Keep the ICI finalizer for
+direct ICI deletion and make later child cleanup idempotent after the parent
+barrier has completed. Do not solve this by globally reversing the existing
+NAR/ClusterInstance deletion order.
+
 ## Expected implementation changes
 
 | Area | Expected changes |
 | --- | --- |
-| IBI-O API and validation | Optional preparation inputs, durable attempt/control/cleanup status, conditions, validation and generated CRDs. Keep existing installation behaviour when preparation is absent. |
-| IBI-O controller | Gate in `controllers/imageclusterinstall_controller.go` before normal host startup; new preparation reconciler/helpers; explicit finalizer and handoff handling. |
+| IBI-O API and validation | Preparation inputs, claimed input snapshot, input freezing, cancellation/acknowledgement, durable status, conditions and generated CRDs. Preserve installation when preparation is absent. |
+| IBI-O controller | Gate on requested or persisted preparation before normal startup; reconcile claimed inputs through cancellation, cleanup and handoff; validate ISO bytes and origin before BMC mutations. |
 | IBI-O BMC client | New Redfish interface and implementation with discovery, credentials/TLS, asynchronous tasks, media identity, selective ejection and retry handling. |
-| IBI-O image/callback server | Versioned preparation ISO content, protected BMC-facing delivery, callback authentication and durable result recording. Extend `internal/imageserver` and related configuration as needed. |
+| IBI-O image/callback server | Versioned preparation ISO content, protected preparation-only BMC endpoint, callback authentication and durable result recording. Keep final `/images/` inaccessible through the new endpoint. |
 | Live ISO generation | Add generic preparation-media/network bootstrap and reporting units through the existing ISO generation mechanism; retain a reusable ISO and optional SSH access. |
-| O-Cloud Manager/SiteConfig integration | Carry preparation inputs and conditions, enforce the normal-install gate and render the agreed initial BMH configuration without overwriting control metadata. |
+| O-Cloud Manager/SiteConfig integration | Carry inputs/status and preserve control metadata. Add cancellation and wait for cleanup/release acknowledgement in PR deletion before NAR deletion. |
 | Packaging and RBAC | Deliver IBI-O API, serving configuration and client dependencies through ACM/MCE. Add only permissions actually required; any Lease use needs scoped RBAC. |
 | BMO/Ironic/Metal3 CRDs | No source or schema changes intended. Qualify the detachment and reattachment behaviour against the supported platform versions. |
 
@@ -423,9 +550,26 @@ are demonstrated.
 5. Hand the powered-off host back as externally provisioned and complete the
    existing IBI installation with a new configuration DataImage.
 6. Exercise operator restarts at each ownership boundary, ambiguous Redfish
-   responses, failure/timeout, duplicate/stale callbacks and ICI deletion.
-7. Verify that another ICI cannot claim the same server and that unrelated
-   media, hosts and BMH configuration are preserved.
+   responses, failure/timeout, duplicate/stale callbacks and direct ICI deletion.
+7. Verify that another ICI cannot claim the same server. Reject unrelated
+   inserted media before any power or media mutation even when two other slots
+   are free. Inject unexpected media during preparation and verify handoff
+   remains blocked without ejecting it.
+8. Attempt to change the target, ISO/digest or preparation settings, including
+   removing preparation after claim and before normal `status.bareMetalHostRef`
+   is populated. Verify rejection and that a restart continues the original
+   attempt or its explicit cancellation, without starting normal installation.
+9. Test missing/mismatched digest, disallowed origin, redirects and failed TLS
+   trust. Verify rejection with no image insertion or power change, and verify
+   the successful path uses immutable per-generation publication.
+10. Request final cluster configuration ISOs through the new BMC-facing
+    endpoint, with and without preparation credentials, during and after
+    handoff. Verify access is denied while valid preparation-media downloads
+    and range requests still work.
+11. Delete the ProvisioningRequest while preparation is acquiring control,
+    installing, cleaning up and handing off. Verify cancellation prevents new
+    attempts and NAR/allocation deletion waits for the matching IBI-O cleanup
+    and release acknowledgement, including across restarts and BMC failures.
 
 Unit tests should cover state transitions and operation ordering using a fake
 BMC interface. Integration tests must prove control-transfer acknowledgement,
@@ -444,9 +588,11 @@ discovery, rather than treating success on one iDRAC as generic Redfish support.
 * What persisted ownership mechanism prevents concurrent access to the same
   physical server, including duplicate BMH references?
 * What exact API/status contract records attempts, preparation success,
-  cleanup and handoff without changing existing ICI monitoring semantics?
+  immutable claimed inputs, cleanup and handoff without changing existing
+  ICI monitoring semantics?
 * What is the safe deletion/release state when preparation fails, cleanup
-  cannot finish or the requesting ProvisioningRequest is removed?
+  cannot finish or the requesting ProvisioningRequest is removed, and how
+  is cancellation acknowledged before hardware allocation is released?
 * Can the full cold-boot and handoff sequence pass on stock platform
   components, and does the resulting effort justify this alternative to the
   BMO/Ironic extension?
@@ -460,3 +606,8 @@ discovery, rather than treating success on one iDRAC as generic Redfish support.
 [ibi-reconcile]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/controllers/imageclusterinstall_controller.go#L214
 [ibi-dataimage]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/controllers/imageclusterinstall_controller.go#L751
 [ibi-service-url]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/cmd/manager/main.go#L269
+[ibi-update-validation]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/api/v1alpha1/imageclusterinstall_webhook.go#L58
+[ironic-insertion]: https://github.com/openshift/openstack-ironic/blob/7828a10082034f48ca1d6d305a6766cddb160da4/ironic/drivers/modules/redfish/boot.py#L342
+[ibi-image-handler]: https://github.com/openshift/image-based-install-operator/blob/4bc5f2a691cab4b02638dfd6bd567cd0cf2f9408/internal/imageserver/imageserver.go#L22
+[pr-deletion-order]: https://github.com/openshift-kni/oran-o2ims/blob/63e10b9cebe86a1dc1796c739991eaa016c502c0/internal/controllers/provisioningrequest_controller.go#L1181
+[hardware-release]: https://github.com/openshift-kni/oran-o2ims/blob/63e10b9cebe86a1dc1796c739991eaa016c502c0/internal/hardwaremanager/controller/baremetalhost_manager.go#L1080
