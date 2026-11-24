@@ -1058,8 +1058,8 @@ implemented mechanisms; reject others with a clear `ProblemDetails`.
 - Four generated handlers: `POST`/`GET`(list)/`GET`/`PATCH`/`DELETE`
   `performanceSubscriptions` over the P0 OpenAPI contract.
 - Subscriber RBAC scope + `security` annotations per **DD-004**; callback
-  validation, token handling, and quotas per
-  [§10.9.3](#1093-callback-safety-token-handling-and-quotas).
+  validation (reuse the shared O2 policy) per
+  [§10.9.3](#1093-callback-safety-reuse-the-shared-o2-policy).
 
 ### 10.7 Resilience
 
@@ -1119,23 +1119,39 @@ The `PerformanceMeasurementReport` schema cannot represent emptiness
   ([§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726)); partial data that
   *is* sent is flagged with `isSuspect`.
 
-#### 10.9.3 Callback safety, token handling, and quotas
+#### 10.9.3 Callback safety (reuse the shared O2 policy)
 
-The consumer-supplied `callback` is untrusted input and the O-Cloud makes
-outbound requests to it, so:
+The `callback` is consumer-supplied, so Performance **reuses the existing shared
+O2 callback policy** rather than inventing its own — the same validation alarms
+and cluster subscriptions already apply
+(`commonapi.ValidateCallbackURL` / `ValidateCallbackTarget` in
+`internal/service/common/api/utils.go`):
 
-- **Callback validation** on create/update: require `https`; **reject**
-  loopback, link-local/cloud-metadata (`169.254.0.0/16`, `::1`, `127.0.0.0/8`),
-  and cluster-internal (`*.svc`) targets, and private ranges unless an operator
-  allowlist permits them — mitigating SSRF.
-- **No token leakage.** Do not send the O-Cloud's OAuth bearer token to a
-  consumer-controlled callback. Authenticate delivery with **mTLS** or a
-  per-subscription signed payload (HMAC); the bearer-token client is reserved for
-  trusted internal O2IMS endpoints.
-- **Authorization + quotas.** Only the subscriber role may create subscriptions
-  (DD-003/DD-004); enforce a **per-tenant subscription quota** and a **global
-  cap** so subscriptions cannot DoS the reporter or shared ACM Thanos. Reporter
-  egress respects the service's NetworkPolicy.
+- `https`-only, hostname required;
+- the callback host **must equal the configured SMO host** (`SmoURL`) — callbacks
+  can only target the SMO, which is the primary SSRF defense (stronger than a
+  private-range allowlist) and keeps the delivery client's OAuth token going only
+  to the trusted SMO;
+- the hostname is DNS-resolved and rejected if it resolves into a blocked CIDR
+  (loopback/link-local/private/metadata);
+- a reachability `GET` (expect 204) on create;
+- the delivery client blocks cross-host redirects
+  (`notifier.BlockCrossHostRedirects`).
+
+Performance wires `ValidateCallbackURL` into its subscription `POST`/`PATCH`
+handlers exactly as `internal/service/alarms/api/server.go` does — no
+Performance-specific rules.
+
+**Connection-time enforcement.** The SMO-host pin + cross-host-redirect block are
+the connection-time posture (a callback can't be retargeted away from the SMO).
+Closing the residual create-vs-deliver DNS-rebinding window — re-validating the
+resolved address at delivery — is a gap **shared by all O2 subscription
+services**, so if addressed it belongs in the common notifier/dial path (e.g. a
+dialer that re-checks the resolved IP against the blocklist), benefiting every
+service rather than Performance alone.
+
+**Quotas.** Separately, enforce a per-tenant subscription quota + global cap so
+subscriptions cannot DoS the reporter or shared ACM Thanos.
 
 ---
 
