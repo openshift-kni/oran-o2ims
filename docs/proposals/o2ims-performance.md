@@ -59,6 +59,15 @@ change-history: "#appendix-c-document-version-history"
   - [9.4 Thin / partially covered](#94-thin--partially-covered)
   - [9.5 Realized-coverage limits (from the spike)](#95-realized-coverage-limits-from-the-spike)
   - [9.6 Tier-0 preinstalled PM Jobs (golden set)](#96-tier-0-preinstalled-pm-jobs-golden-set)
+- [10. Subscription Implementation (P4)](#10-subscription-implementation-p4)
+  - [10.1 Values are delivered only via subscriptions](#101-values-are-delivered-only-via-subscriptions)
+  - [10.2 Reuse vs net-new](#102-reuse-vs-net-new)
+  - [10.3 The reporter engine](#103-the-reporter-engine)
+  - [10.4 Reporting-frequency semantics](#104-reporting-frequency-semantics-the-stateful-part)
+  - [10.5 Delivery mechanisms](#105-delivery-mechanisms)
+  - [10.6 Persistence and API](#106-persistence-and-api)
+  - [10.7 Resilience](#107-resilience)
+  - [10.8 Testing](#108-testing)
 - [Appendix A: REST Resource / Method Coverage](#appendix-a-rest-resource--method-coverage)
 - [Appendix B: Files to Create and Modify](#appendix-b-files-to-create-and-modify)
 - [Appendix C: Document Version History](#appendix-c-document-version-history)
@@ -884,7 +893,9 @@ These land in **P4** (subscriptions), alongside the NOTIFICATION reporter.
 ### 9.3 Deferred by explicit choice
 
 - **FILE and STREAM** report delivery — only NOTIFICATION is implemented (P5). The
-  data model includes them; delivery is deferred.
+  data model includes them; delivery is deferred. Design options (FILE via
+  XML/pull, STREAM via Kafka) are detailed in
+  [§10.5](#105-delivery-mechanisms).
 
 ### 9.4 Thin / partially covered
 
@@ -960,6 +971,107 @@ PhysicalServer set and `diskIoUtilization` activate once their metrics are added
 to the custom allowlist ([5.2](#52-the-pm-dictionary-metric-catalog)). IDs
 (`performanceMeasureDefinitionId`/`performanceMeasureId`) are synthesized and
 stable per [5.8.3](#583-catalog-entry-schema).
+
+---
+
+## 10. Subscription Implementation (P4)
+
+Subscriptions are the Performance API's **delivery** half (a PM Job only
+*collects/defines* — [§5](#5-data-model-mapping)). This section details how they
+are built.
+
+### 10.1 Values are delivered only via subscriptions
+
+There is **no REST endpoint that returns measurement values**. `GET
+/measurementJobs/{id}` returns job *metadata* — definition, `state`/`status`,
+`measuredResources` (which resources), and `collectedMeasurements` (a
+`CollectedMeasurement` **catalog**: which measures/resource-types, with
+`timeAdded`/`timeDeleted`/`isCurrentlyMeasured`) — but **no sample values**. The
+actual `PerformanceMeasurementRecord` values live in the Store and reach a
+consumer **only** through a subscription report. (In our design the data is
+PromQL-queryable in Thanos, so a direct "query measurements" endpoint is trivial
+to add, but it is **not** in clause 3.7 — a non-standard extension, outside O2
+conformance.)
+
+### 10.2 Reuse vs net-new
+
+The delivery machinery is largely reused from the alarms service; the net-new
+work is the **reporter**.
+
+| Reused | Path |
+|---|---|
+| Generic notifier engine (worker, provider interfaces, retry) | `internal/service/common/notifier/` |
+| Outbox + cursor + subscription models | `internal/service/common/db/models/` |
+| Subscription + notification repo helpers | `internal/service/common/repo/` |
+| Provider-adapter + listener + migration templates | `internal/service/alarms/internal/{notifier_provider,listener,db/migrations}/` |
+
+**Key difference from alarms:** alarms is event-driven (DB change → PG NOTIFY →
+notifier). Performance has no DB-change trigger (data is in Thanos), so a
+**reporter** polls on a schedule, writes reports to the **same outbox**, and the
+existing notifier delivers them. Net-new: the reporter, the reporting-frequency
+state machine, and FILE/STREAM delivery.
+
+### 10.3 The reporter engine
+
+Per subscription, driven by `measurementReportingFrequency`:
+
+1. tick on `reportInterval`;
+2. evaluate `subscriptionCriteria` (AND-combined, [§5.5](#55-subscriptions-and-performancesubscriptioncriteria)) — `jobCriteria` → jobs, `resource*Criteria` → the resolver, `measurementCriteria` → catalog definitions;
+3. query Thanos (`step`, `counterWindow` — [§5.8](#58-schema-reconciliation-and-the-measurement-mapping-catalog));
+4. assemble the nested `PerformanceMeasurementReport → JobReport → ResourceReport → MeasurementValue`;
+5. enqueue to the outbox → the notifier delivers it.
+
+### 10.4 Reporting-frequency semantics (the stateful part)
+
+`PerformanceReportingFrequency` drives behaviour:
+
+- `subscriptionMode`: `SAMPLE` (emit every interval), `ON_CHANGE` (emit only on
+  change), `TARGET_DEFINED` (producer picks).
+- `suppressRedundant` + `heartbeatInterval`: suppress unchanged values but emit
+  at least once per heartbeat.
+
+This needs **per-(subscription, series) last-sent state** — stored in a DB table
+or in-memory rebuilt on restart (decision for P4). The interface models a
+**single** `PerformanceReportingFrequency`; multiple cadences are achieved with
+**multiple subscriptions** ([§9.2.2](#92-material-items--design)).
+
+### 10.5 Delivery mechanisms
+
+The reporter is shared; only the last mile differs.
+
+| Mechanism | Delivery | Reuse |
+|---|---|---|
+| **NOTIFICATION** (baseline) | POST `PerformanceMeasurementReport` to `callback` via outbox + notifier (callback declared in `openapi.yaml`) | ~all |
+| **FILE** | serialize report to a file (XML/3GPP TS 32.435 first), store (PVC/object storage), send **FileReadyNotification** to `callback`, expose a **pull** endpoint; optional **push** to `remoteFileLocation` (spec-undefined protocol) | notifier + storage |
+| **STREAM** | **Kafka** (preferred): produce reports to a topic the consumer subscribes to. Offsets/retention solve connection-loss/backpressure/storm. Needs a broker (Strimzi) + topic/serialization/security contract; coords via `extensions` (no `callback`) | reporter only |
+
+**Order of adoption:** NOTIFICATION (P4) → FILE (if the SMO is 3GPP-PM-file
+oriented; pull + XML first) → STREAM/Kafka (on concrete demand). Advertise only
+implemented mechanisms; reject others with a clear `ProblemDetails`.
+
+### 10.6 Persistence and API
+
+- A `performance_subscription` table + reuse of the outbox/cursor tables; repo
+  CRUD + `WithTransaction` (migrations/models copied from alarms).
+- Four generated handlers: `POST`/`GET`(list)/`GET`/`PATCH`/`DELETE`
+  `performanceSubscriptions` over the P0 OpenAPI contract.
+- Subscriber RBAC scope + `security` annotations per **DD-004**.
+
+### 10.7 Resilience
+
+Reuses the outbox retry/backoff/cursor; adds bounded retention and storm control
+on reconnect, and raises a PM-job/subscription alarm on delivery or data-
+unavailable failures — detailed in
+[§9.2.3](#923-delivery-resilience-connection-loss-data-unavailable-storm-control-clause-21726)
+and [§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726).
+
+### 10.8 Testing
+
+- **Unit:** criteria matching; the frequency state machine
+  (`ON_CHANGE`/`suppressRedundant`/heartbeat); report assembly.
+- **Integration:** mock Thanos → reporter → outbox → notifier → test callback.
+- **envtest:** subscription repo; **e2e:** a real subscription delivering to a
+  test callback.
 
 ---
 
