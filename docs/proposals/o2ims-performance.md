@@ -1031,9 +1031,9 @@ Per subscription, driven by `measurementReportingFrequency`:
 - `suppressRedundant` + `heartbeatInterval`: suppress unchanged values but emit
   at least once per heartbeat.
 
-This needs **per-(subscription, series) last-sent state**, persisted and run
-under a single active reporter — see
-[§10.9.1](#1091-single-active-reporter--durable-state). The interface models a
+This needs **per-(subscription, series) last-sent state** under a single active
+reporter — in-memory and best-effort for the MVP (see
+[§10.9.1](#1091-single-active-reporter-best-effort-mvp)). The interface models a
 **single** `PerformanceReportingFrequency`; multiple cadences are achieved with
 **multiple subscriptions** ([§9.2.2](#92-material-items--design)).
 
@@ -1082,25 +1082,34 @@ and [§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726).
 Three design decisions that the reporter must honour (resolving the
 correctness/security gaps in the subscription design).
 
-#### 10.9.1 Single active reporter + durable state
+#### 10.9.1 Single active reporter (best-effort MVP)
 
 The reporter is **stateful** (last-sent value per series for `suppressRedundant`
-/ `ON_CHANGE`) and must not run concurrently across replicas.
+/ `ON_CHANGE`). For the **MVP it is best-effort** — it tolerates brief gaps and
+occasional redundant reports around restart/failover, which keeps the design
+simple.
 
-- **Singleton via leader election.** Only the elected leader runs reporter ticks,
-  using a Kubernetes `Lease` (the same leader-election mechanism the operator
-  already uses). Non-leaders stay idle. This prevents duplicate reports when the
-  Deployment has more than one replica.
-- **Durable state.** Per `(subscriptionId, series)` the last-sent value + sample
-  timestamp, and per `subscriptionId` the last-report time, are persisted in a
-  `performance_subscription_report_state` table, written **in the same
-  transaction** that enqueues the report to the outbox. On restart or failover
-  the new leader reloads this state, so `suppressRedundant`/`ON_CHANGE` continue
-  correctly — no redundant storm, no missed-change gap. `lastReportTime` also
-  bounds catch-up: a tick reports the window `(lastReportTime, now]`.
-- **Fallback** (if state is not persisted): the leader emits a full snapshot on
-  start (treat the first post-start tick as an initial report). DB persistence is
-  preferred.
+- **One active reporter.** Run the reporter as a **single-replica Deployment**
+  (or, for lower failover downtime, leader-elected via a Kubernetes `Lease`) so
+  there is normally one active instance — avoiding steady-state duplicate reports
+  from multiple replicas.
+- **In-memory state.** `suppressRedundant`/`ON_CHANGE` state is held in memory.
+  On restart the reporter starts fresh and its next tick emits a **full snapshot**
+  (treated as a first report); `heartbeatInterval` then re-establishes the
+  baseline. No state table, no transactional coupling.
+- **Best-effort contract.** On restart/failover expect (a) a brief **gap** for the
+  downtime window (no backfill), (b) one **redundant** snapshot, and (c) possibly
+  a few **duplicate** reports during leader overlap. Duplicates are already within
+  the at-least-once delivery contract (outbox + retry), and gaps are consistent
+  with the spec's CONNECTION LOST / DATA UNAVAILABLE handling (clause 2.1.7.2.6).
+
+**Post-MVP (gapless / exact-once).** If an SMO needs no-gap, no-duplicate
+reporting (e.g. billing/SLA), persist per-`(subscriptionId, series)` last-sent
+state + `lastReportTime` and make the state-write + outbox-enqueue a single
+transaction **fenced against a stale leader** — either a Lease fencing token
+checked in that transaction, or a unique `(subscriptionId, window)` report key
+enforced by a constraint (so a duplicate/stale commit fails). Deferred beyond the
+MVP.
 
 #### 10.9.2 "No data this interval" has a defined contract
 
