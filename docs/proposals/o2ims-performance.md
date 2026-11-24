@@ -1104,20 +1104,27 @@ The reporter is **stateful** (last-sent value per series for `suppressRedundant`
 
 #### 10.9.2 "No data this interval" has a defined contract
 
-The `PerformanceMeasurementReport` schema cannot represent emptiness
-(`jobReports` ≥1 → `measuredResources` ≥1 → `measurementValues` ≥1), so:
+The `PerformanceMeasurementReport` schema cannot be empty (`jobReports` ≥1 →
+`measuredResources` ≥1 → `measurementValues` ≥1), so a tick with no values emits
+**no report**. Three distinct cases, each with an explicit contract so a consumer
+never has to infer a fault from raw silence:
 
-- **Skip, don't send.** A tick that yields no values (all suppressed, or nothing
-  resolved) emits **no report**. Consumers must treat a skipped interval as "no
-  update", **not** as zero.
-- **Heartbeat is the liveness contract.** `heartbeatInterval` guarantees a report
-  at least that often even when values are unchanged, so prolonged silence beyond
-  the heartbeat is a detectable fault — not ambiguous with "no change".
-- **DATA UNAVAILABLE is surfaced out-of-band**, not in the payload: when Thanos is
-  unreachable or a managed-cluster collector reports no data, the job `status`
-  goes `DEGRADED`/`FAILED` and a PM-job alarm is raised
+- **Unchanged values** (the subscription resolves to ≥1 series, but nothing
+  changed under `suppressRedundant`/`ON_CHANGE`): `heartbeatInterval` guarantees a
+  report at least that often, so for these subscriptions silence beyond the
+  heartbeat **is** a detectable fault.
+- **Empty match** (the criteria currently resolve to **zero** series/resources):
+  the reporter legitimately emits nothing and this is **not** a fault — the
+  heartbeat/liveness contract does **not** apply (there is nothing to heartbeat).
+  The empty-match condition is surfaced in the subscription representation (an
+  `extensions` indicator, and derivable from the referenced jobs'
+  `measuredResources`), not via silence. Liveness is therefore anchored to "the
+  subscription has matching series", not to raw absence.
+- **Data unavailable** (the subscription *should* have data, but Thanos is
+  unreachable or a collector reports no data): a fault, surfaced via the job
+  `status` (`DEGRADED`/`FAILED`) + a PM-job alarm
   ([§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726)); partial data that
-  *is* sent is flagged with `isSuspect`.
+  *is* sent is flagged `isSuspect`.
 
 #### 10.9.3 Callback safety (reuse the shared O2 policy)
 
