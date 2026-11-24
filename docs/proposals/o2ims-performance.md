@@ -68,6 +68,7 @@ change-history: "#appendix-c-document-version-history"
   - [10.6 Persistence and API](#106-persistence-and-api)
   - [10.7 Resilience](#107-resilience)
   - [10.8 Testing](#108-testing)
+  - [10.9 Correctness and security](#109-correctness-and-security)
 - [Appendix A: REST Resource / Method Coverage](#appendix-a-rest-resource--method-coverage)
 - [Appendix B: Files to Create and Modify](#appendix-b-files-to-create-and-modify)
 - [Appendix C: Document Version History](#appendix-c-document-version-history)
@@ -1030,8 +1031,9 @@ Per subscription, driven by `measurementReportingFrequency`:
 - `suppressRedundant` + `heartbeatInterval`: suppress unchanged values but emit
   at least once per heartbeat.
 
-This needs **per-(subscription, series) last-sent state** — stored in a DB table
-or in-memory rebuilt on restart (decision for P4). The interface models a
+This needs **per-(subscription, series) last-sent state**, persisted and run
+under a single active reporter — see
+[§10.9.1](#1091-single-active-reporter--durable-state). The interface models a
 **single** `PerformanceReportingFrequency`; multiple cadences are achieved with
 **multiple subscriptions** ([§9.2.2](#92-material-items--design)).
 
@@ -1055,7 +1057,9 @@ implemented mechanisms; reject others with a clear `ProblemDetails`.
   CRUD + `WithTransaction` (migrations/models copied from alarms).
 - Four generated handlers: `POST`/`GET`(list)/`GET`/`PATCH`/`DELETE`
   `performanceSubscriptions` over the P0 OpenAPI contract.
-- Subscriber RBAC scope + `security` annotations per **DD-004**.
+- Subscriber RBAC scope + `security` annotations per **DD-004**; callback
+  validation, token handling, and quotas per
+  [§10.9.3](#1093-callback-safety-token-handling-and-quotas).
 
 ### 10.7 Resilience
 
@@ -1072,6 +1076,66 @@ and [§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726).
 - **Integration:** mock Thanos → reporter → outbox → notifier → test callback.
 - **envtest:** subscription repo; **e2e:** a real subscription delivering to a
   test callback.
+
+### 10.9 Correctness and security
+
+Three design decisions that the reporter must honour (resolving the
+correctness/security gaps in the subscription design).
+
+#### 10.9.1 Single active reporter + durable state
+
+The reporter is **stateful** (last-sent value per series for `suppressRedundant`
+/ `ON_CHANGE`) and must not run concurrently across replicas.
+
+- **Singleton via leader election.** Only the elected leader runs reporter ticks,
+  using a Kubernetes `Lease` (the same leader-election mechanism the operator
+  already uses). Non-leaders stay idle. This prevents duplicate reports when the
+  Deployment has more than one replica.
+- **Durable state.** Per `(subscriptionId, series)` the last-sent value + sample
+  timestamp, and per `subscriptionId` the last-report time, are persisted in a
+  `performance_subscription_report_state` table, written **in the same
+  transaction** that enqueues the report to the outbox. On restart or failover
+  the new leader reloads this state, so `suppressRedundant`/`ON_CHANGE` continue
+  correctly — no redundant storm, no missed-change gap. `lastReportTime` also
+  bounds catch-up: a tick reports the window `(lastReportTime, now]`.
+- **Fallback** (if state is not persisted): the leader emits a full snapshot on
+  start (treat the first post-start tick as an initial report). DB persistence is
+  preferred.
+
+#### 10.9.2 "No data this interval" has a defined contract
+
+The `PerformanceMeasurementReport` schema cannot represent emptiness
+(`jobReports` ≥1 → `measuredResources` ≥1 → `measurementValues` ≥1), so:
+
+- **Skip, don't send.** A tick that yields no values (all suppressed, or nothing
+  resolved) emits **no report**. Consumers must treat a skipped interval as "no
+  update", **not** as zero.
+- **Heartbeat is the liveness contract.** `heartbeatInterval` guarantees a report
+  at least that often even when values are unchanged, so prolonged silence beyond
+  the heartbeat is a detectable fault — not ambiguous with "no change".
+- **DATA UNAVAILABLE is surfaced out-of-band**, not in the payload: when Thanos is
+  unreachable or a managed-cluster collector reports no data, the job `status`
+  goes `DEGRADED`/`FAILED` and a PM-job alarm is raised
+  ([§9.2.1](#921-pm-job-failure--o-cloud-alarm-clause-21726)); partial data that
+  *is* sent is flagged with `isSuspect`.
+
+#### 10.9.3 Callback safety, token handling, and quotas
+
+The consumer-supplied `callback` is untrusted input and the O-Cloud makes
+outbound requests to it, so:
+
+- **Callback validation** on create/update: require `https`; **reject**
+  loopback, link-local/cloud-metadata (`169.254.0.0/16`, `::1`, `127.0.0.0/8`),
+  and cluster-internal (`*.svc`) targets, and private ranges unless an operator
+  allowlist permits them — mitigating SSRF.
+- **No token leakage.** Do not send the O-Cloud's OAuth bearer token to a
+  consumer-controlled callback. Authenticate delivery with **mTLS** or a
+  per-subscription signed payload (HMAC); the bearer-token client is reserved for
+  trusted internal O2IMS endpoints.
+- **Authorization + quotas.** Only the subscriber role may create subscriptions
+  (DD-003/DD-004); enforce a **per-tenant subscription quota** and a **global
+  cap** so subscriptions cannot DoS the reporter or shared ACM Thanos. Reporter
+  egress respects the service's NetworkPolicy.
 
 ---
 
