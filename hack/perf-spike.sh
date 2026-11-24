@@ -148,9 +148,9 @@ if [[ -n "${HW}" ]]; then echo "${HW}" | sed 's/^/    /'; else note "none - phys
 hr "End-to-end: one golden recipe via query_range (cpuAverageUtilization)"
 END=$(date +%s); START=$((END-3600))
 curl -s "${THANOS_URL}/api/v1/query_range" \
-    --data-urlencode 'query=100*(1-avg by (cluster,node)(rate(node_cpu_seconds_total{mode="idle"}[5m])))' \
+    --data-urlencode 'query=100*(1-avg by (cluster,instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))' \
     --data-urlencode "start=${START}" --data-urlencode "end=${END}" --data-urlencode "step=300" \
-    | jq '.data.result[0] // "NO RESULT - check node_cpu_seconds_total is collected and has a node label"' 2>/dev/null
+    | jq '.data.result[0] // "NO RESULT - check node_cpu_seconds_total is collected and has an instance label"' 2>/dev/null
 
 hr "Done"
 echo "Record findings in docs/spike/perf-spike-findings.md (go/no-go per risk + exact join key)."
