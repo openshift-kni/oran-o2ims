@@ -53,6 +53,10 @@ feature whose cost can be inferred from the original forwarding diff.
 All implementation and hardware results described here use development
 builds. Upstream acceptance, release integration, failure/restart hardware
 qualification and broader compatibility remain required before support.
+Independent BMO/Ironic updates must also preserve existing workflows when
+preparation is unused. Current implicit opt-in and legacy ramdisk adoption/
+cleanup gaps still need resolution; the all-updated lab run does not qualify
+that compatibility contract.
 
 ## Problem and overall goal
 
@@ -185,6 +189,11 @@ Once BMO has claimed configuration, a missing or changed resource cannot
 silently turn the request into a boot-only deployment. API lookup failure
 is distinct from absence, and a deleting DataImage is not newly consumed.
 Maintainers must agree this opt-in and its mixed-version delivery contract.
+An existing consumer could already create a live ISO plus DataImage without
+requesting automated IBI preparation. Agree a discriminator or compatible
+legacy handling before this combination can automatically impose new Ironic
+metadata/status requirements. An ordinary installation must not silently
+enter the new ownership protocol merely because BMO was updated.
 
 The ownership keys are controller-maintained durable state:
 
@@ -308,6 +317,71 @@ and fails closed when inserted media identity cannot be established. The
 active-instance path observes the existing media instead of silently
 replacing it or rebooting. That logic has unit coverage; conductor restart
 and loss of the Ironic database still require separate hardware qualification.
+
+## Existing workflows and independent rollout
+
+BMO and Ironic updates must preserve supported existing installations when
+preparation is unused, including ordinary IBI, non-IBI provisioning, normal
+DataImage management and existing ramdisk/configdrive consumers. Updating one
+component must not require simultaneous updates to the other or to IBI-O for
+those workflows. A compatible component set is required before enabling the
+new deployment-owned configuration path. Define that feature requirement
+separately from the ability to roll out each component independently.
+
+This is an acceptance requirement, not a property established by the current
+working branches. Their shared-path changes expose two compatibility gaps:
+
+- BMO's live-ISO/DataImage combination is an implicit opt-in that can match
+  existing consumers. Without agreed gating or compatible legacy handling,
+  updating BMO alone can introduce fingerprint/status dependencies on a newer
+  Ironic even though the consumer did not request the new IBI workflow.
+- Ironic's ramdisk/configdrive behavior also changes for existing consumers.
+  An unsupported configdrive interface now causes an error where the previous
+  path logged a warning and continued. Active-instance adoption and selective
+  cleanup can require `ramdisk_virtual_media` records that an older Ironic
+  never produced. An Ironic update or restart could therefore reject adoption
+  or cleanup of a deployment created under the previous contract.
+
+Preserve supported legacy behavior, or obtain explicit maintainer agreement
+on any intentional change and its compatibility handling. Distinguish a
+pre-existing legacy deployment from loss of ownership records for a newly
+claimed deployment. Accommodating legacy state must not bypass the new
+configuration-required boot check, infer release from absent records, or
+justify ejecting unidentified media. The exact gating/adoption contract
+remains a design and implementation decision for review.
+
+### Mixed-version regression matrix
+
+These are development tests with preparation unused. "Existing" refers to
+the supported baseline, and "updated" to the proposed implementation. Record
+exact versions and test both fresh requests and workloads that were already
+running before each component update.
+
+| BMO | Ironic/runtime image | Required existing-workflow result |
+| --- | --- | --- |
+| Updated | Existing | Ordinary IBI/non-IBI provisioning, normal DataImage attach/detach and boot-only live ISO work without the new observation metadata/API path. Existing live-ISO/DataImage consumers retain a supported path. |
+| Existing | Updated | Ordinary provisioning, virtual-media replacement, existing ramdisk/configdrive requests and their cleanup retain supported behavior. Qualify any agreed change to previously ignored unsupported configdrive input. |
+| Updated | Updated | With existing IBI-O and preparation unused, ordinary installation, power handling and cleanup remain functional; the component combination alone does not activate preparation. |
+| Either supported version | Updated over an existing ramdisk/configdrive deployment | Restart/adoption and deletion/teardown remain supported without requiring records the old implementation never created. |
+
+Include structured configdrive input, prebuilt URL-based images, supported
+and unsupported boot interfaces, existing mounted media and default boot-media
+replacement. Preserve image contents and supported publication/cleanup behavior.
+Tests of the new concurrent-media path do not replace these regressions.
+
+The November 25 run used updated BMO, Ironic and IBI-O throughout, including
+normal IBI handoff after preparation. It did not qualify this matrix or a
+preparation-disabled installation. Report independent rollout as unqualified
+until the gaps are resolved and the matrix passes; a shared API version alone
+does not establish compatibility of the new observation protocol.
+
+IBI-O's optional ICI API and callback Service/certificate deployment have
+separate packaging and compatibility requirements in the
+[end-to-end plan](https://github.com/openshift-kni/oran-o2ims/pull/5357).
+Those resources do not create a dependency on new BMO/Ironic versions for
+ordinary installation. The IBI-O image and its own deployment resources must
+form a supported package, including ordinary image serving when its preparation
+listener is disabled.
 
 ## Prototype size and validation
 
@@ -606,8 +680,9 @@ following contracts with maintainers:
    controller-owned annotation contract should be accepted? The implemented
    deletion policy waits for producer-coordinated teardown; should upstream
    retain that policy or make DataImage deletion request cancellation?
-3. Is live ISO plus an associated DataImage the appropriate opt-in, and how
-   should the requirement for configuration survive resource changes?
+3. Is live ISO plus an associated DataImage the appropriate opt-in, how are
+   existing consumers protected during independent rollout, and how should
+   the requirement for configuration survive resource changes?
 4. Are the redaction-safe URL fingerprints and existing API 1.93 observation
    the appropriate identity interface? Which persisted metadata is stable
    across conductor restart and which recovery behavior is required if the
@@ -618,7 +693,8 @@ following contracts with maintainers:
 6. Should publication naming use the existing detected format or an explicit
    format signal, and how should any such signal reach the publisher?
 7. Which upstream and OpenShift release targets and hardware combinations
-   should receive the changes together?
+   support enabling the new path, and what legacy behavior/adoption contract
+   permits independent component updates when preparation is unused?
 
 ### Proposed review and delivery breakdown
 
@@ -636,9 +712,11 @@ following contracts with maintainers:
    Existing detection and an explicit signal are implementation choices to
    evaluate; neither should silently change other configdrive input forms.
 5. Review the implemented opted-in BMO ownership/status/finalizer behavior and
-   successful disk-preserving handoff. Complete hardware cancellation, failure,
-   restart and ordinary-workflow qualification before enabling the feature,
-   and coordinate the required component versions for platform delivery.
+   successful disk-preserving handoff. Resolve implicit opt-in and legacy
+   adoption/cleanup gaps, and qualify the mixed-version matrix. Complete
+   hardware cancellation, failure, restart and ordinary-workflow qualification
+   before enabling the feature. Coordinate compatible versions for preparation
+   without making ordinary installs depend on simultaneous component updates.
 
 Required regression coverage includes live ISO with and without configuration,
 ordinary provisioning, lookup failures and deleting resources, initial deploy
