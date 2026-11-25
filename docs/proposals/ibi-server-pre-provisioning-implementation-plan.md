@@ -33,7 +33,7 @@ or ACM version provides this feature.
 
 | Area | Current state | Remaining delivery work |
 | --- | --- | --- |
-| BMO, Ironic and Ironic image | Development code implements concurrent media, durable ownership, identity-aware status, selective cleanup and the runtime dependency. | Maintainer agreement, release integration, recovery and ordinary-workflow qualification. |
+| BMO, Ironic and Ironic image | Development code implements concurrent media, durable ownership, identity-aware status, selective cleanup and the runtime dependency. | Maintainer agreement, release integration, recovery and independent-rollout/ordinary-workflow qualification. |
 | IBI-O API and lifecycle | Optional preparation API, immutable inputs, callback handling, teardown and normal handoff are implemented; standalone success path passed on hardware. | API/configuration review, failure/restart qualification and ACM packaging. |
 | Reusable ISO bootstrap | Generic network/callback assets and a development Ignition utility work with one shared ISO across distinct attempts. | Public versioned asset interface and automatic O-Cloud Manager ISO generation. |
 | O-Cloud Manager integration | Existing seed/ISO publication and ordinary provisioning provide the base. | Preparation inputs, creation-time ICI configuration, status, budgets and deletion ordering. |
@@ -199,7 +199,7 @@ lab run bypassed SiteConfig, so it did not qualify this interaction.
 
 ### Supported components and configuration
 
-The deployed combination must include the new ICI schema/controller/server,
+Enabling preparation requires the new ICI schema/controller/server,
 matching guest protocol, BMO ownership behavior, matching Ironic metadata/media
 handling and existing virtual-media GET support at Ironic API 1.93.
 No BMH or DataImage CRD changes are used by the current Metal3 implementation.
@@ -210,6 +210,44 @@ combination before requesting preparation. A generic API version or the
 existence of a DataImage finalizer does not prove the new behavior is installed.
 The lab's custom images and observed platform versions are not that compatibility
 contract. Upstream merges and downstream ACM/OpenShift delivery need coordination.
+
+### Independent rollout and existing workflows
+
+The compatible component set above is a requirement for enabling preparation.
+Existing IBI and non-IBI installations must remain usable when BMO, Ironic or
+IBI-O is updated independently and preparation is not requested. Ordinary
+installation must not require simultaneous delivery of all three components.
+The optional ICI fields must also preserve existing objects when the CRD and
+IBI-O are updated separately. These are acceptance requirements; the development
+branches have not yet qualified independent rollout.
+
+The IBI-O controller currently skips preparation when both its spec and status
+blocks are absent. That guard does not by itself establish compatibility of
+the shared Metal3 paths or operator deployment resources. Source review found
+these gaps requiring resolution and regression coverage:
+
+- BMO currently treats a live ISO plus an associated DataImage as the opt-in.
+  An existing consumer could already supply that combination. Agree a
+  discriminator or compatible legacy handling so updating BMO alone cannot
+  silently activate ownership/status requirements needing an updated Ironic.
+- Ironic's changed ramdisk/configdrive paths also serve existing consumers.
+  Unsupported configdrive requests now fail where they previously warned and
+  continued. Adoption and cleanup can require media identity records that an
+  older Ironic never created. Preserve a supported legacy path and obtain
+  explicit maintainer agreement for any intentional behavior change. Required
+  configuration in the new workflow must still fail before power-on when it
+  cannot be delivered. The [Metal3 proposal](https://github.com/openshift-kni/oran-o2ims/pull/5477)
+  describes these boundaries in more detail.
+- IBI-O's development deployment enables a callback listener and requires its
+  serving-certificate Secret even when no ICI requests preparation. Qualify
+  the complete Service/certificate/deployment packaging and a disabled-listener
+  configuration that preserves ordinary image serving; see the callback
+  configuration section below.
+
+These are gaps identified from the working code, not failures demonstrated
+by an ordinary-installation lab run. The November 25 all-updated success path
+does not qualify mixed component versions, existing ramdisk deployments, or
+preparation-disabled installation.
 
 ## Configuration ISO and generic bootstrap
 
@@ -296,6 +334,18 @@ The production ACM configuration surface must supply the callback endpoint,
 trust, allowed sources, certificates and network policy. Patching an ACM-managed
 Deployment, as done for development setup, is not the supported configuration
 interface. Agree that surface with ACM before enabling O-Cloud Manager consumers.
+
+The development manifests set `PREPARATION_PORT=8444` and mount the required
+`ibi-preparation-serving-certs` Secret. An absent Secret can prevent the pod
+from starting, and listener startup failures can terminate the shared image
+server. This dependency applies even when individual ICIs omit preparation.
+Ship the matching Service, certificates, deployment and binary as a consistent
+IBI-O package, and qualify certificate creation/rotation and rollout ordering.
+Also support and test ordinary image serving with the preparation listener
+disabled and without its certificate dependency. These are IBI-O packaging
+requirements; they do not make ordinary installs depend on new BMO/Ironic
+versions. Missing required TLS configuration for an enabled preparation
+listener must remain an explicit failure.
 
 Verified boot caches are currently per attempt, under the IBI-O data directory,
 with a maximum ISO size of 20 GiB. Pod replacement can discard this local cache;
@@ -550,6 +600,28 @@ proof. The standalone success path is hardware-verified. BMO unit tests and
 affected IBI-O tests and scoped/configured lint checks passed. These results
 do not stand in for upstream CI or the remaining hardware cases.
 
+Independent-rollout validation is a development requirement with preparation
+omitted. In the matrix below, "existing" means the supported baseline component
+version, and "updated" means the proposed implementation. Record exact image
+versions and test installation, power/media handling, and deletion/cleanup.
+
+| Updated component | Other components | Required ordinary-workflow validation |
+| --- | --- | --- |
+| BMO only | Existing Ironic and IBI-O | Ordinary IBI, non-IBI provisioning, ordinary DataImage handling and boot-only live ISO remain usable. Existing live-ISO/DataImage consumers do not silently acquire new dependencies. |
+| Ironic and its runtime image only | Existing BMO and IBI-O | Ordinary provisioning, virtual-media replacement, and existing ramdisk/configdrive deployment, adoption and cleanup retain supported behavior without new ownership records. |
+| IBI-O only, with matching deployment resources | Existing BMO and Ironic | ICI without preparation completes normally; shared image serving remains available with the callback listener disabled and during qualified certificate/deployment rollout. |
+| ICI CRD only | Existing IBI-O, BMO and Ironic | Existing ICIs remain valid and their ordinary controller operations succeed; optional preparation fields introduce no requirement for existing requests. |
+| All components | Updated BMO, Ironic and IBI-O | Ordinary IBI and non-IBI workflows still complete and clean up with preparation omitted. |
+
+Include workloads created before each component update, not only fresh requests.
+The updated-IBI-O case must cover both a supported existing ICI schema with
+preparation absent and the updated optional schema. Existing active ramdisk
+deployments must survive supported restart/adoption and remain removable
+without records that only the new implementation creates. Define the allowed
+legacy behavior for unsupported configdrive interfaces with maintainers. The
+matrix is unqualified until these tests pass; it is separate from the all-new
+preparation success test and its capability checks.
+
 Before supported delivery, development must cover:
 
 - Ordinary IBI without preparation and live ISO without required configuration.
@@ -594,7 +666,8 @@ coverage for callback authentication, payload layout and detailed controller rac
 ## Decisions remaining for review and delivery
 
 1. Accept the implemented deployment-owned Metal3 direction, annotation and
-   URL-fingerprint contracts, opt-in and component-skew behavior.
+   URL-fingerprint contracts and opt-in, while preserving existing consumers
+   through independent rollout and supported legacy adoption/cleanup.
 2. Accept the two successive configuration DataImages and existing layout reuse,
    refining the earlier same-resource handoff design.
 3. Select the supported creation-time SiteConfig input path or qualify an explicit
@@ -604,7 +677,9 @@ coverage for callback authentication, payload layout and detailed controller rac
 5. Agree the separate PR preparation condition/status and overall timeout policy,
    including handoff allowance and allocation-retention behavior on failure.
 6. Agree ACM-owned endpoint/trust/network/storage configuration, required component
-   releases and the supported restart/state-loss recovery contract.
+   releases and the supported restart/state-loss recovery contract. Qualify
+   IBI-O packaging and preparation-disabled availability independently of the
+   component set required to enable preparation.
 7. Qualify publication/retention and aggregate capacity, document compatible target
    disks, and complete the remaining development and QA matrix.
 
