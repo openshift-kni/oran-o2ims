@@ -14,10 +14,15 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
+	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
 )
 
 const resyncInterval = 1 * time.Hour
+
+// serviceAccount is the alarms server's service account, used to mint tokens for calls to the other O2IMS servers
+var serviceAccount = fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName)
 
 //go:generate mockgen -source=infrastructure.go -destination=generated/mock_infrastructure_client.generated.go -package=generated
 

@@ -13,7 +13,7 @@ output-options:
   nullable-type: true
   name-normalizer: ToCamelCaseWithDigits
   overlay:
-    path: ../../../../../../../internal/service/resources/api/openapi-overlay.yaml
+    path: ../../../../../../internal/service/resources/api/openapi-overlay.yaml
 
 import-mapping:
   ../../common/api/openapi.yaml: "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
