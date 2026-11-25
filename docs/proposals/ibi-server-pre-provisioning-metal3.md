@@ -18,37 +18,41 @@ For automated IBI pre-provisioning, Metal3 would coordinate attachment of
 both images, report a failure before power-on if the required configuration
 cannot be attached, and provide reliable attachment status and cleanup. The
 sections below describe how existing BMO and Ironic functionality can support
-this capability, what the prototype demonstrated, and the lifecycle work
-still needed for production use.
+this capability, the implemented lifecycle and hardware evidence, and the
+remaining contracts and qualification needed for production use.
 
 ## Summary
 
-Extend the existing Metal3 live-ISO provisioning path so that a separate
-configuration ISO can be attached **before the first power-on**. The initial
-consumer is [automated IBI server pre-provisioning](./ibi-server-pre-provisioning.md):
-many servers boot the same IBI live ISO, while each server receives its own
-preparation-attempt configuration through a small `DataImage`.
+The requested capability is to boot a live ISO with a second, per-host
+configuration ISO already mounted. The development implementation reuses
+BMH live-ISO provisioning, DataImage resources, URL-based configdrives,
+Ironic image publication, and its existing pre-power-on configdrive hook.
+BMO and Ironic retain ownership of BMC and power operations.
 
-The proposed approach builds on functionality already present in the
-Bare Metal Operator (BMO) and Ironic: BMH live-ISO provisioning, `DataImage`
-resources, URL-based configdrives, local image publication, and Ironic's
-pre-power-on configdrive hook. BMO and Ironic continue to own BMC operations.
+There are now two evidence checkpoints: the November 23, 2026 delivery
+prototype and a November 25 complete IBI preparation and installation.
+The latter passed with no manual reconcile, media-attachment, or power-on
+workaround during the fresh attempt. Static networking, authenticated
+completion, media teardown, disk preservation and normal IBI installation
+were exercised on one Dell/iDRAC combination.
 
-A prototype successfully demonstrated this sequence on a Dell PowerEdge
-XR8620t with iDRAC 7.30.30.51. Its first-boot production source changes are
-small: **five files, 69 added lines and 24 removed lines** across BMO and
-Ironic. The complete production contribution spans `baremetal-operator`,
-`openstack-ironic`, and `ironic-image`; tests, runtime packaging, and additional
-status, cleanup and recovery work are outside that measured source diff.
-The complete production scope has not yet been estimated.
+The working implementation adds durable ownership annotations, identity-aware
+observation, interruption-safe media records and ordered release. It changes
+no BMH or DataImage CRD and adds no Ironic HTTP request field. Those choices
+remain proposed contracts for maintainer review. The separate IBI-O changes
+include an ICI CRD extension, guest bootstrap and callback processing; see the
+[end-to-end implementation plan](https://github.com/openshift-kni/oran-o2ims/pull/5357).
 
-The preferred lifecycle direction is for the live-ISO deployment to own both
-preparation images, using the DataImage as an immutable deployment input.
-Status and finalization must reflect that ownership. This model still needs
-maintainer agreement and lifecycle validation beyond the first-boot prototype.
+The original five-file, 69-line addition count described forwarding and
+insertion only. The current non-test Metal3 source changes span 12 files,
+with 697 lines added and 40 removed against the baselines below, plus runtime
+packaging. Tests, generated output, IBI-O and O-Cloud Manager are additional.
+This is a reviewable extension of existing machinery, rather than a complete
+feature whose cost can be inferred from the original forwarding diff.
 
-This is a discussion proposal, not a declaration that the complete IBI
-pre-provisioning workflow or all supported hardware has been qualified.
+All implementation and hardware results described here use development
+builds. Upstream acceptance, release integration, failure/restart hardware
+qualification and broader compatibility remain required before support.
 
 ## Problem and overall goal
 
@@ -129,91 +133,85 @@ versions.
 
 ## Proposed workflow
 
-1. The producer, initially the IBI Operator (IBI-O), creates the per-attempt
-   configuration ISO and its DataImage before requesting the live-ISO
-   deployment. The DataImage uses the BMH's name and namespace.
-2. The producer requests deployment through the existing BMH live-ISO and
-   power controls. For IBI preparation, it must arrange a host state that
-   permits actual provisioning; the usual `externallyProvisioned: true`
-   handoff for an already prepared IBI server is a different stage.
-3. BMO captures the configuration identity/version for the deployment and
-   supplies its URL through the existing Ironic request's `configdrive` field,
-   alongside the boot ISO. The prototype forwards the URL; durable input and
-   ownership capture are additional production work.
-4. Ironic stages and inserts the live ISO through its existing boot path.
-5. Ironic fetches the configuration ISO, publishes it with a usable filename,
-   and inserts it into a free compatible slot while preserving the boot ISO.
-6. After successful preparation of both media, Ironic sets the boot device
-   and powers on the server using its existing deployment sequence.
-7. The live guest locates the configuration by filesystem label, reads its
-   contents, and runs the IBI preparation workflow. IBI-O monitors actual
-   preparation completion and coordinates subsequent cleanup and handoff.
-8. Under the preferred ownership model, the producer requests a safe stop of
-   the live-ISO deployment. Its teardown releases both preparation images,
-   and DataImage finalization waits for that release.
-9. Once preparation ownership is cleared, the producer transitions to normal
-   IBI installation with a fresh cluster-configuration DataImage. Preserving
-   the prepared disk through that transition remains a validation gate.
+1. IBI-O binds a preparation attempt to its ICI and BMH identities. It
+   freezes the attempt input and creates an immutable configuration ISO.
+   The DataImage uses the BMH's name and namespace.
+2. IBI-O requests live-ISO deployment with cleaning disabled. The host must
+   permit actual provisioning; `externallyProvisioned: true` is restored
+   for the later normal disk-boot installation.
+3. Before issuing the provisioner request, BMO protects the DataImage with
+   its finalizer and records the immutable deployment association. It
+   forwards the configuration URL through the existing `configdrive` input.
+4. Ironic publishes the boot and configuration ISOs, records their identities,
+   and inserts them into compatible devices without replacing inserted media.
+5. Only after both required images are observed inserted does the existing
+   ramdisk deployment path request power-on.
+6. BMO observes the intended configuration through the Ironic virtual-media
+   API, using redaction-safe URL fingerprints. DataImage status reports that
+   configuration, independently of whether a boot ISO is also present.
+7. The live environment applies the per-host network configuration, prepares
+   the disk, and reports its terminal result to IBI-O over authenticated HTTPS.
+8. IBI-O requests power-off, confirms it, and clears the live deployment.
+   Ironic ejects only owned media and cleans its publications. BMO persists
+   release acknowledgement before clearing host ownership.
+9. IBI-O deletes the preparation DataImage and waits for its finalizer,
+   revokes/removes preparation credentials and artifacts, then returns the
+   host to the normal IBI installation path with a fresh configuration
+   DataImage. Normal disk boot is requested by that existing path.
 
-BMH `provisioned` or Ironic `active` means that live boot was arranged; it
-does not establish that the OS installation and seed restoration succeeded.
-That completion signal remains the responsibility of the IBI workflow.
+Steps 1 through 9 were exercised in the November 25 success-path run.
+BMH `provisioned` and Ironic `active` still mean that live boot was arranged;
+only IBI-O's authenticated result establishes preparation completion.
 
 ## BMO changes
 
-The prototype changes three production source files:
+The current implementation retains the small forwarding change and adds its
+ownership, observation and finalization contract:
 
-| File | Change and purpose |
+| Location | Change and purpose |
 | --- | --- |
-| `internal/controller/metal3.io/baremetalhost_controller.go` | In `actionProvisioning`, read the BMH-associated DataImage for a live-ISO deployment and pass its URL to the provisioner. |
-| `pkg/provisioner/provisioner.go` | Add the configuration URL to the internal `ProvisionData` structure. |
-| `pkg/provisioner/ironic/ironic.go` | Let `getConfigDrive` return the existing ISO URL for this case, and forward it on both initial deployment and deployment retry. |
+| `internal/controller/metal3.io/baremetalhost_controller.go` | Claim live-ISO configuration before provisioning; isolate ordinary DataImage power-management handling while deployment ownership is active; release ownership after teardown. |
+| `internal/controller/metal3.io/liveiso_dataimage.go` | Versioned durable claim, immutable input checks, deployment-aware DataImage status and positive release acknowledgement. |
+| `internal/controller/metal3.io/dataimage_controller.go` | Dispatch claimed images to deployment-aware observation/finalization instead of ordinary any-media status and ejection handling. |
+| `internal/controller/metal3.io/host_state_machine.go` | Preserve the owned teardown path through deletion and deprovisioning. |
+| `pkg/provisioner/provisioner.go` | Configuration URL in internal `ProvisionData`; optional `ConfigDriveProvisioner` observation interface. |
+| `pkg/provisioner/ironic/ironic.go` | Forward the unchanged configuration ISO URL for initial deployment/retry, preserve ordinary structured configdrive behavior, and check the owned configuration. |
+| `pkg/provisioner/ironic/configdrive_status.go` | Compare recorded source/publication URL fingerprints with the requested configuration and actual inserted media through Ironic API 1.93. |
+| `pkg/provisioner/demo/demo.go`, `pkg/provisioner/fixture/fixture.go` | Adapt provisioner implementations to the internal interface. |
 
-The URL must pass through unchanged. Converting the payload into a new
-OpenStack-style configdrive from host configuration would lose the intended
-filesystem label and IBI-specific file layout.
+A live-ISO request with an associated DataImage is the implemented opt-in.
+A live ISO without requested configuration retains its existing path.
+Once BMO has claimed configuration, a missing or changed resource cannot
+silently turn the request into a boot-only deployment. API lookup failure
+is distinct from absence, and a deleting DataImage is not newly consumed.
+Maintainers must agree this opt-in and its mixed-version delivery contract.
 
-The production implementation must additionally record input identity and
-deployment ownership, and keep ordinary BMH power-management DataImage
-operations from independently manipulating deployment-owned media. Those
-changes are outside the measured forwarding prototype and depend on the
-[ownership contract](#preferred-direction-deployment-owned-preparation-media).
+The ownership keys are controller-maintained durable state:
 
-A live ISO with no associated DataImage keeps its existing behavior, and
-ordinary provisioning keeps its structured configdrive path. A DataImage
-that is being deleted must not be attached. An API-read error must not be
-treated as an absent resource and silently omit configuration. The prototype
-tests cover these cases and forwarding through the actual deployment request.
+- BMH: `baremetalhost.metal3.io/live-iso-dataimage`.
+- DataImage: `dataimage.metal3.io/deployment-owner`.
 
-Keep BMO's live-ISO omission guard for deployments that have not explicitly
-requested configuration. The prototype uses a live-ISO request plus an
-associated DataImage as its opt-in; maintainers must agree whether that is
-sufficient or an explicit requirement needs another representation.
+The version-1 JSON association binds host UID, BMC address and boot MAC,
+DataImage UID/generation/source URL, and boot URL. BMO records it before
+consumption and checks it during observation and cleanup. The DataImage
+receives `released: true` only after successful provisioner teardown.
+A missing host annotation alone is not evidence that media was released.
+Users and GitOps must preserve these keys and must not edit them to request
+or cancel a deployment.
 
-Once configuration is required, unsupported hardware or boot interfaces must
-produce a clear pre-power-on failure. Do not fall back to a boot-only request.
-The existing [Ironic ramdisk deployment][ironic-ramdisk-deploy] can warn and
-ignore configdrive input when its boot interface lacks the capability; that
-behaviour cannot satisfy this required-configuration contract. Agree where
-the capability gate belongs and preserve legacy behaviour for requests that
-do not opt in. A supported boot interface must still fail before power-on if
-no usable free device is found.
-
-The requirement must also survive the DataImage disappearing or changing
-during deployment; see [the lifecycle requirements](#production-lifecycle-requirements).
-
-`ProvisionData` is an internal Go structure. The prototype requires no new
-BMH or DataImage spec field, Ironic HTTP request field, or Kubernetes RBAC
-permission. BMO's executable and its Go provisioner plugin must be built
-together from the same source revision and toolchain after changing their
-shared internal structure.
+The URL passes through unchanged. Rebuilding an OpenStack-layout configdrive
+would discard the IBI label and payload. This uses an internal Go interface
+extension and existing Ironic APIs; BMH/DataImage CRDs and Kubernetes RBAC
+are unchanged. Build the BMO executable and its provisioner plugin together
+from the same revision and toolchain. IBI-O's separate ICI CRD changes are
+outside this Metal3 API statement.
 
 ## Ironic changes
 
 ### Preserve boot media when inserting configuration
 
-In `ironic/drivers/modules/redfish/boot.py`, add an insertion mode to
-`_insert_vmedia` and `_insert_vmedia_in_resource` that:
+The working code in `ironic/drivers/modules/redfish/boot.py` adds an insertion
+mode to `_insert_vmedia` and `_insert_vmedia_in_resource` that:
 
 - Preserves already inserted media, including the boot ISO.
 - Selects a known-empty compatible slot. An unknown insertion state does
@@ -223,9 +221,9 @@ In `ironic/drivers/modules/redfish/boot.py`, add an insertion mode to
 - Reports an error when no usable slot exists instead of replacing the boot
   image or proceeding without the requested configuration.
 
-Use that mode from the existing `_attach_configdrive` hook and remove its
-type-wide USB eject. Keep the existing eject/reinsert behavior as the default
-for boot-media replacement, including its existing hardware workarounds.
+The existing `_attach_configdrive` hook uses that mode without a type-wide USB
+eject. The existing eject/reinsert behavior remains the default for ordinary
+boot-media replacement, including its hardware workarounds.
 Regression tests must verify both the configuration-preservation mode and
 the unchanged default replacement path, plus their interaction during retry
 and later handoff.
@@ -251,10 +249,10 @@ The required behaviour is to publish ISO payloads with an ISO filename, such
 as `configdrive-<node UUID>.iso`, while preserving their bytes and retaining
 the existing handling of other binary formats.
 
-The prototype in `ironic/drivers/modules/image_utils.py` reuses the result of
-the [existing MIME-type detection][ironic-image-preparation] to choose that
+The working implementation in `ironic/drivers/modules/image_utils.py` reuses
+the result of the [existing MIME-type detection][ironic-image-preparation] to choose that
 suffix. The helper already invokes `file(1)` to distinguish text-encoded
-configuration from binary image content; the prototype adds no extra probe.
+configuration from binary image content; the change adds no extra probe.
 Its ISO decision uses the detected payload format rather than a source URL's
 suffix.
 
@@ -272,15 +270,44 @@ correct ownership and lifetime rules.
 ### Include the existing helper's runtime dependency
 
 The existing URL-based configdrive helper invokes `file(1)` to detect the
-downloaded payload format. The stock-based lab image lacked that executable,
-so the initial attempt failed before power-on.
+payload format. The initial stock-based lab image lacked that executable,
+so configuration preparation failed before power-on. The development image
+now includes it, and the working `openshift/ironic-image` change adds `file`
+with an explanatory comment to `main-packages-list.ocp`.
 
-The OpenShift Ironic image needs the `file` runtime package, or an equivalent
-maintainer-approved implementation of the existing detection requirement.
-For the current image build this means checking and updating
-`main-packages-list.ocp` in `openshift/ironic-image`. The lab overlay added
-one package-install instruction to the existing Ironic image. A shipping
-change belongs in the maintained runtime image build.
+Ship that maintained packaging change, or an agreed replacement for the
+existing detection requirement. The local Cachito checkout override used for
+lab builds is not part of the contribution. The maintained image build and
+CI must validate the final dependency pins and package list.
+
+### Required configuration, observation and teardown
+
+`ironic/drivers/modules/ramdisk.py` rejects requested configuration when the
+boot interface lacks `ramdisk_boot_configdrive`, including validation again
+when the deployment request arrives. It retains the existing ordering:
+prepare the instance and its media, then request power-on. The Redfish path
+observes both expected URLs inserted before returning from preparation.
+
+The working Redfish code records `driver_internal_info.ramdisk_virtual_media`
+before insertion, so an interrupted insertion still has an ownership record
+for cleanup. It retains the boot URL, published configuration URL and source
+configuration URL, and records two SHA-256 URL fingerprints:
+
+- `configuration_source_sha256`: the DataImage source URL identity.
+- `configuration_media_sha256`: the published configuration URL identity.
+
+Ironic masks `configdrive` and `configdrive_source` in API responses. BMO
+compares these fingerprints with its claimed URL and the inserted device's
+image URL, preserving redaction and existing API permissions. These are
+URL identities, not ISO-content hashes; IBI-O separately verifies the boot
+ISO's content digest before serving it to Ironic.
+
+Teardown identifies owned URLs, ejects only matching devices and waits for
+release before deleting publications/metadata. It preserves unrelated media
+and fails closed when inserted media identity cannot be established. The
+active-instance path observes the existing media instead of silently
+replacing it or rebooting. That logic has unit coverage; conductor restart
+and loss of the Ironic database still require separate hardware qualification.
 
 ## Prototype size and validation
 
@@ -325,11 +352,64 @@ code passed; its full lint run also reported pre-existing findings in unchanged
 code. These results do not substitute for upstream CI and broader platform
 and hardware qualification.
 
+## Current source footprint and end-to-end validation
+
+Measured on November 25 against the baseline commits in
+[Existing functionality to reuse](#existing-functionality-to-reuse):
+
+| Repository | Non-test source files | Lines added | Lines removed |
+| --- | ---: | ---: | ---: |
+| BMO | 9 | 508 | 7 |
+| Ironic | 3 | 189 | 33 |
+| **Total** | **12** | **697** | **40** |
+
+Counts include comments, blank lines, new source files and provisioner adapters.
+They exclude tests, generated files, documentation, IBI-O and the runtime
+package-list addition. They describe the current working implementation,
+including the original prototype; they are not a new estimate of all remaining
+production work. Publication format, persisted metadata and ownership interfaces
+may change during upstream review.
+
+The November 25 fresh run used an OpenShift 5.0.2 hub, ACM/MCE 5.0.0,
+modified BMO/Ironic/IBI-O images, and a Dell PowerEdge XR8620t with iDRAC
+7.30.30.51. The installed SNO ran OCP 4.22.15. These identify a development
+test platform, not minimum supported release versions.
+
+| Observation, workstation UTC | Result |
+| --- | --- |
+| 18:45:17 | Both new preparation ISOs inserted while the server was Off. |
+| 18:46:23 | Automatic live-ISO power-on; BMO subsequently reached provisioned and DataImage attached status with zero errors. |
+| During live preparation | Static networking with DHCP disabled; the guest's entire configuration ISO matched its immutable Secret; source/publication URL fingerprints matched while raw URLs stayed redacted. |
+| 19:06:29 | IBI-O persisted the authenticated success result after seed restoration and 145 successful image pulls. |
+| 19:06:41 / 19:06:47 | Physical Off, followed by both preparation images absent. |
+| 19:07:11 / 19:09:16 | Fresh normal configuration ISO inserted while Off, followed by automatic normal power-on. |
+| By 19:26:21 | ICI preparation and installation Completed; node Ready; ClusterVersion Available and not Failing; API cluster ID and disk boot ID matched the intended installation. |
+
+The new disk's sysroot, boot and container storage were on the intended NVMe
+partitions. Automatic cleaning stayed disabled through the handoff. Preparation
+Secrets, token, verified cache and ownership claims were released; the normal
+configuration DataImage remained under the ordinary installation lifecycle.
+No manual reconcile, media attachment, power-on patch or finalizer bypass was
+needed during this fresh attempt.
+
+An earlier November 25 run exposed the API-redaction identity bug and an IBI-O
+handoff bug: setting its normal managed marker too early suppressed the real
+normal boot request. Both were corrected with failing-before/passing-after
+regressions, rebuilt and exercised by the fresh run above. The initial run
+with manual recovery is not counted as the unassisted pass.
+
+BMO's full unit target passed. The affected Ironic suites, including the API
+redaction regression, passed 238 tests; affected IBI-O tests and scoped/configured
+lint checks also passed. Pre-existing BMO full-lint findings remain separate
+from changed-code validation. Upstream CI, failure/restart hardware testing,
+ordinary-workflow regression and cross-vendor qualification remain required.
+
 ## Production lifecycle requirements
 
-The bootstrap prototype intentionally held the DataImage stable and checked
-actual guest media independently. The following work is required before
-enabling the complete automated workflow.
+The working implementation now covers the success-path ownership, observation,
+release and disk-boot handoff below. These remain proposed upstream contracts.
+Unit coverage and the fresh end-to-end run establish different levels of evidence;
+interruption, failure and compatibility qualification remain explicit work.
 
 ### Existing management paths
 
@@ -351,13 +431,14 @@ configdrive use. Consider both approaches:
 
 | Approach | Delivery and lifecycle model | Work still required |
 | --- | --- | --- |
-| A: configdrive delivery, preferred | Reuse Ironic's pre-power-on hook; deployment owns both images, with DataImage as immutable input. | Record ownership/identity, isolate ordinary attachment, and integrate status, deletion and teardown. |
+| A: configdrive delivery, implemented direction | Reuse Ironic's pre-power-on hook; deployment owns both images, with DataImage as immutable input. | Annotation claims, identity-aware status and ordered release are implemented; upstream contract review and recovery qualification remain. |
 | B: coordinated DataImage attachment | Ordinary BMH DataImage handling owns configuration and coordinates with initial live-ISO deployment. | Order attachment with boot preparation and power-on; fix identity, cleanup and finalizers. |
 
 Option A is preferred because it reuses a demonstrated coordination point:
 Ironic already inserts configdrive media after setting up the live boot image
-and before power-on. It requires an explicit ownership contract; the small
-delivery prototype does not itself supply that contract.
+and before power-on. The working code supplies the annotation-based ownership
+contract described above; the November 23 forwarding prototype alone did not
+provide it.
 
 Option B deserves review, but coherent status and cleanup do not follow from
 moving attachment earlier. Existing status accepts any inserted image and
@@ -372,13 +453,15 @@ preserves configuration attached earlier.
 Configdrive delivery and a coherent DataImage resource contract can coexist.
 The BMO-facing API can report and finalize deployment-owned media while Ironic
 performs the physical operations. Compare that integration with B before
-selecting the final contract; neither option is production-complete today.
+accepting the upstream contract. Option A now has success-path implementation
+and hardware evidence; option B remains an alternative rather than an
+implemented and qualified path.
 
 ### Preferred direction: deployment-owned preparation media
 
 Treat preparation configuration as an immutable input consumed by the
-live-ISO deployment. The following model is proposed for maintainer discussion;
-it has not been implemented or validated by the bootstrap prototype:
+live-ISO deployment. The development implementation uses the following model;
+its success path is hardware-verified and its upstream acceptance remains open:
 
 1. Record the DataImage UID, requested version and source URL against the
    BMH/deployment identity before consuming it. Configuration required by a
@@ -405,9 +488,10 @@ it has not been implemented or validated by the bootstrap prototype:
    DataImage and returning to ordinary DataImage management. A new resource
    must not inherit the previous deployment's attachment or completion state.
 
-This may avoid a new independently selective-detach interface for preparation,
-because its two images can be managed together. It still requires reliable
-identity, status, deletion and restart behaviour. If maintainers require
+The implementation manages the two preparation images through deployment
+teardown, with identity-aware ejection that preserves unrelated devices. It
+adds no independent configuration-replacement API. Restart behavior still
+requires the qualification described below. If maintainers require
 independent configuration replacement/ejection while the live boot remains
 active, that is additional scope requiring identity-aware selective operations.
 
@@ -418,43 +502,51 @@ supported policy must be explicit and tested through final handoff.
 
 ### Configuration identity and status
 
-BMO's current [`GetDataImageStatus`][bmo-dataimage-status] returns true when **any** virtual media is
-inserted. A boot ISO alone is therefore insufficient evidence that the
-intended configuration is attached. Ironic can also publish a different URL
-from the DataImage source URL. In the successful prototype, DataImage's
-attached-image status remained empty despite configuration being readable.
+The baseline [`GetDataImageStatus`][bmo-dataimage-status] accepts any inserted
+virtual media, so the boot ISO alone cannot prove configuration attachment.
+That ordinary helper is retained for the existing workflow. Deployment-owned
+DataImages instead use the new `ConfigDriveProvisioner` observation path.
 
-Define a supported association among the DataImage identity and requested
-version, the Ironic-published image, and the selected device. Use that
-association for status and lifecycle operations across retries and restarts.
-Matching an arbitrary CD or relying on an undocumented cached filename is
-not sufficient. Determine with maintainers whether existing node metadata,
-status, and virtual-media APIs can express the contract, or whether an
-interface extension is needed. The prototype's lack of API/CRD changes does
-not settle that production decision.
+BMO verifies the source URL fingerprint against the claimed DataImage and the
+published URL fingerprint against the actual inserted device image. Busy node
+operations are retried. An absent media record on an active deployment is an
+error; a not-yet-recorded publication fingerprint is pending. A missing or mismatched source fingerprint
+is an error rather than permission to observe arbitrary media.
+A mismatched or malformed claim does not fall back to ordinary attachment.
+DataImage attached status records the claimed source URL only when the correct
+published configuration is observed inserted.
+
+This relies on existing Ironic virtual-media GET support at API version 1.93
+and the new metadata keys in the matching Ironic build. Neither raw URL
+unredaction nor a new permission is required. Supporting version skew and
+stabilizing these metadata keys are delivery/maintainer decisions; ordinary
+metadata presence is not a substitute for a supported component combination.
 
 ### Deletion and handoff semantics
 
-Under deployment ownership, deleting the preparation DataImage must not
-trigger the ordinary CD-type-wide detach path. Its finalizer must complete
-once the owning deployment has released its configuration; an unrelated
-inserted boot image cannot keep that finalizer pending indefinitely. The
-existing any-image status check does not meet this identity requirement.
+The implemented DataImage finalizer waits for producer-coordinated deployment
+teardown. It does not invoke ordinary type-wide ejection while ownership is
+active. BMO records release on the matching DataImage after provisioner
+teardown, then removes the host claim. A released deleting DataImage can finish
+finalizing even if that host claim has already been cleared.
 
-Define what happens if configuration changes or is deleted while Ironic is
-fetching or attaching it. The producer must not replace attempt data in place
-and assume a running guest sees the new contents. Agree whether immutable
-attempt data, a durable deployment snapshot, or an explicit requirement is
-needed so a missing resource cannot turn a configuration-required deployment
-into a boot-only deployment. Live ISO without requested configuration must
-continue to work as it does today.
+The immutable association prevents a missing/replaced configuration resource
+from silently becoming optional. Changes to consumed generation or URL produce
+an error, rather than independently replacing media beneath a running guest.
+API read errors and unknown/malformed ownership retain the cleanup barrier.
+Maintainers must review this deletion contract; deletion-as-cancellation would
+be a different explicit policy.
 
-Retain published files for as long as the BMC can still fetch them. Ensure
-cancellation and teardown cannot race an in-flight attachment into starting
-an obsolete deployment. IBI-O must coordinate the later move from live-ISO
-deployment to disk boot and normal IBI configuration. The lab
-used disabled automatic cleaning; preserving the newly prepared disk through
-handoff and any BMO deprovisioning/cleaning transitions still needs validation.
+IBI-O waits for physical power-off, clears the live deployment with automatic
+cleaning disabled, waits for available/release, and deletes the preparation
+DataImage. It then removes attempt artifacts and creates a fresh normal
+configuration DataImage. The November 25 run verified that handoff preserved
+the prepared NVMe contents and automatically completed disk installation.
+
+Retain publications until the BMC no longer needs them. Failure and interruption
+cases must additionally establish that an in-flight insertion cannot survive
+cancellation and restart an obsolete deployment. No recovery path may simply
+remove a finalizer or infer release from missing metadata.
 
 ### Failure reporting and restart recovery
 
@@ -472,16 +564,19 @@ on manually editing status or removing finalizers.
 
 ### Hardware and transport compatibility
 
-The passed test establishes support for one server/firmware combination.
+The passed tests establish development evidence for one server/firmware combination.
 Advertising multiple media slots does not by itself prove concurrent boot
 and configuration delivery. Qualify the supported vendor/firmware matrix,
 System- and Manager-level APIs, media-type overlap, vendor restrictions,
 publication URLs, and BMC-to-Ironic connectivity and TLS trust.
 
-The real configuration ISO can contain per-attempt credentials. Apply the
-existing publication path's access and transport controls, keep credentials
-out of logs, and define the artifact's retention with its producer. The lab
-used a non-secret marker payload and did not qualify credential handling.
+The preparation configuration ISO contains a real per-attempt credential.
+The full run exercised authenticated callbacks, Secret-backed immutable bytes
+and token/artifact cleanup. Keep the internal image service private, use TLS
+on the qualified fetch/publication paths, keep credentials out of logs, and
+coordinate retention with the producer. The external callback endpoint must
+not expose the credential-bearing image paths. This is functional validation,
+not a claim that transport/access control is qualified for every deployment.
 
 The current configdrive hook requests USB-compatible media; supporting a
 second optical-only device would need its own compatibility decision and
@@ -496,25 +591,30 @@ Metal3 owns delivery, boot ordering, media observation, and media cleanup.
 IBI-O owns preparation-attempt data, completion monitoring, timeouts, and
 the transition to normal IBI installation. The reusable live ISO still needs
 its configuration-reader and callback services, and networking must work
-early enough for preparation. Those IBI-O/ISO changes are outside this
-Metal3-focused proposal and were not exercised by the marker-only test.
+early enough for preparation. The IBI-O/ISO implementation is covered by the
+end-to-end plan in PR 5357.
+It was exercised together with Metal3 in the November 25 full run; the earlier
+marker-only test remains limited to delivery.
 
-The bootstrap result supports a small, reusable delivery enhancement. Before
-finalizing the BMO feature contribution or making IBI depend on it, resolve
-the ownership model and these maintainer questions:
+The working implementation supports the proposed deployment-owned direction.
+Before finalizing contributions or enabling the supported feature, agree the
+following contracts with maintainers:
 
 1. Confirm the documented URL-based configdrive path's supported contract for
    prebuilt images with an IBI-specific label and payload layout.
 2. Is deployment ownership the right model for preparation media, and what
-   persisted state keeps ordinary BMH DataImage operations separate from it?
-   Should DataImage deletion wait for teardown or request cancellation?
+   controller-owned annotation contract should be accepted? The implemented
+   deletion policy waits for producer-coordinated teardown; should upstream
+   retain that policy or make DataImage deletion request cancellation?
 3. Is live ISO plus an associated DataImage the appropriate opt-in, and how
    should the requirement for configuration survive resource changes?
-4. How should BMO and Ironic represent configuration identity and report
-   its actual attachment without confusing it with the boot ISO?
-5. Can existing deployment teardown safely release both preparation images,
-   including their publications and finalizers, or are additional interfaces
-   needed? Is independently selective configuration cleanup actually required?
+4. Are the redaction-safe URL fingerprints and existing API 1.93 observation
+   the appropriate identity interface? Which persisted metadata is stable
+   across conductor restart and which recovery behavior is required if the
+   Ironic database or publications are lost?
+5. Does the implemented identity-aware deployment teardown provide the required
+   release contract for both images and publications? Is independent replacement
+   while live boot remains active required, or can it remain outside this scope?
 6. Should publication naming use the existing detected format or an explicit
    format signal, and how should any such signal reach the publisher?
 7. Which upstream and OpenShift release targets and hardware combinations
@@ -535,10 +635,10 @@ the ownership model and these maintainer questions:
 4. Agree the publication filename/format contract and its cleanup behaviour.
    Existing detection and an explicit signal are implementation choices to
    evaluate; neither should silently change other configdrive input forms.
-5. Complete the opted-in BMO delivery and agreed ownership/status/finalizer
-   behaviour, then validate actual preparation, cancellation, restart recovery
-   and disk-preserving handoff into normal IBI installation before enabling
-   the feature. Coordinate the required component versions for platform delivery.
+5. Review the implemented opted-in BMO ownership/status/finalizer behavior and
+   successful disk-preserving handoff. Complete hardware cancellation, failure,
+   restart and ordinary-workflow qualification before enabling the feature,
+   and coordinate the required component versions for platform delivery.
 
 Required regression coverage includes live ISO with and without configuration,
 ordinary provisioning, lookup failures and deleting resources, initial deploy
@@ -549,9 +649,9 @@ status identity, ownership isolation from ordinary DataImage handling,
 updates/deletion during attachment, teardown of both owned preparation images,
 finalizer release, restart recovery, and disk-preserving IBI handoff. Verify
 that normal boot-media replacement retains its existing behaviour while
-configuration insertion preserves the boot ISO. The delivery prototype
-supplies a tested starting point; the lifecycle model and cases above remain
-release gates for the full workflow.
+configuration insertion preserves the boot ISO. The working lifecycle and
+full success-path run now provide the baseline; remaining recovery, regression
+and compatibility cases are release gates for the supported workflow.
 
 [bmo-configdrive]: https://github.com/openshift/baremetal-operator/blob/34bbeb376836bf01793d4e70d29065d619ebcaa1/pkg/provisioner/ironic/ironic.go#L1169
 [bmo-power]: https://github.com/openshift/baremetal-operator/blob/34bbeb376836bf01793d4e70d29065d619ebcaa1/internal/controller/metal3.io/baremetalhost_controller.go#L1680
