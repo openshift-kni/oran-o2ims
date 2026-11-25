@@ -17,6 +17,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/db/repo/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure"
@@ -50,6 +51,11 @@ var _ = Describe("Alertmanager API Client", func() {
 		amClient      *alertmanager.AMClient
 		mockAMServer  *httptest.Server
 		testAPIAlerts []alertmanager.APIAlert
+		fakeClientset *k8sfake.Clientset
+		serverHost    string
+		tempCAFile    string
+		tokenNS       string
+		tokenSA       string
 	)
 
 	BeforeEach(func() {
@@ -71,9 +77,12 @@ var _ = Describe("Alertmanager API Client", func() {
 		}))
 
 		// Create fake kubernetes clientset for token requests
-		fakeClientset := k8sfake.NewSimpleClientset()
+		tokenNS, tokenSA = "", ""
+		fakeClientset = k8sfake.NewSimpleClientset()
 		fakeClientset.PrependReactor("create", "serviceaccounts/token",
 			func(action k8stesting.Action) (bool, runtime.Object, error) {
+				tokenNS = action.GetNamespace()
+				tokenSA = action.(k8stesting.CreateActionImpl).Name
 				return true, &authenticationv1.TokenRequest{
 					Status: authenticationv1.TokenRequestStatus{
 						Token:               "fake-token",
@@ -90,12 +99,11 @@ var _ = Describe("Alertmanager API Client", func() {
 
 		// Create temporary CA file with the test server's certificate
 		tempDir := GinkgoT().TempDir()
-		tempCAFile := tempDir + "/ca.crt"
-		err := os.WriteFile(tempCAFile, certPEM, 0o600)
-		Expect(err).ToNot(HaveOccurred())
+		tempCAFile = tempDir + "/ca.crt"
+		Expect(os.WriteFile(tempCAFile, certPEM, 0o600)).To(Succeed())
 
 		// Extract server hostname from test server URL without the scheme
-		serverHost := mockAMServer.URL[8:] // Skip "https://"
+		serverHost = mockAMServer.URL[8:] // Skip "https://"
 
 		// Set up minimal fake k8s client (only needed for infrastructure)
 		scheme := runtime.NewScheme()
@@ -195,6 +203,20 @@ var _ = Describe("Alertmanager API Client", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to handle alerts"))
 		})
 	})
+
+	DescribeTable("mints the token for the alertmanager-client service account in the operator namespace",
+		func(namespaceEnv, wantNamespace string) {
+			GinkgoT().Setenv(constants.DefaultNamespaceEnvName, namespaceEnv)
+			amClient = alertmanager.NewAlertmanagerClient(fakeClient, mockRepo, infra, fakeClientset, serverHost, tempCAFile)
+			testAPIAlerts = []alertmanager.APIAlert{}
+
+			Expect(amClient.SyncAlerts(ctx)).To(Succeed())
+			Expect(tokenNS).To(Equal(wantNamespace))
+			Expect(tokenSA).To(Equal(constants.DefaultNamespace + "-alertmanager-client"))
+		},
+		Entry("falls back to the default namespace", "", constants.DefaultNamespace),
+		Entry("uses a non-default operator namespace", "custom-ns", "custom-ns"),
+	)
 
 	Describe("RunAlertSyncScheduler", func() {
 		It("should schedule alert syncs at regular intervals", func() {

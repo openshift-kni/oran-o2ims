@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/alertmanager"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +34,8 @@ var _ = Describe("Alertmanager", func() {
 	)
 
 	BeforeEach(func() {
+		// The expected config below uses the default namespace in the alarms-server URL
+		GinkgoT().Setenv(constants.DefaultNamespaceEnvName, "")
 		scheme = runtime.NewScheme()
 		_ = corev1.AddToScheme(scheme)
 		c = fake.NewClientBuilder().WithScheme(scheme).Build()
