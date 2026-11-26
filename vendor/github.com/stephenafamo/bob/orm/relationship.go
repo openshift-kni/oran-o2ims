@@ -60,6 +60,10 @@ type Relationship struct {
 	Name  string    `yaml:"name"`
 	Sides []RelSide `yaml:"sides"`
 
+	// Bridge is populated by the generator for a two-hop relationship whose
+	// bridge model can be created with both parents already bound.
+	Bridge *RelBridge `yaml:"-" json:"-"`
+
 	// These can be set through user configuration
 	Ignored bool
 	// Do not create the inverse of a user configured relationship
@@ -67,6 +71,12 @@ type Relationship struct {
 	// Makes sure the factories does not require the relationship to be set.
 	// Useful if you're not using foreign keys
 	NeverRequired bool `yaml:"never_required"`
+}
+
+// RelBridge identifies the bridge table and the names of its two direct
+// parent relationships (before Go aliases are applied).
+type RelBridge struct {
+	Table, Local, Foreign string
 }
 
 func (r Relationship) Validate() error {
@@ -305,7 +315,9 @@ func (r Relationship) ValuedSides() []RelSetDetails {
 
 	sort.Slice(valuedSides, func(i, j int) bool {
 		for _, iMapped := range valuedSides[i].Mapped {
-			if iMapped.ExtPosition == valuedSides[j].Position {
+			// A constant predicate has no source row. Its zero ExtPosition
+			// must not make it depend on the local row at position zero.
+			if !iMapped.HasValue() && iMapped.ExtPosition == valuedSides[j].Position {
 				return true
 			}
 		}
