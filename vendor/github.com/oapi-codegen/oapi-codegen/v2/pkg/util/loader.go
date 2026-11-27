@@ -1,7 +1,7 @@
 package util
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,14 +9,14 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/speakeasy-api/openapi/overlay/loader"
-	"gopkg.in/yaml.v3"
+
+	"github.com/oapi-codegen/oapi-codegen/v2/internal/overlay"
 )
 
 // LoadSwagger loads the OpenAPI document at filePath, which is a local path or
-// a URL, and resolves its external references, including references to remote
-// URLs. Use LoadSwaggerWithOverlay with AllowRemoteRefsFrom to restrict which
-// remote documents may be fetched.
+// a URL, and resolves its external references. References to other local
+// files are followed; references to remote URLs are refused. Use
+// LoadSwaggerWithOverlay with AllowRemoteRefsFrom to follow remote references.
 func LoadSwagger(filePath string) (swagger *openapi3.T, err error) {
 	return loadSwagger(filePath, nil, http.DefaultClient)
 }
@@ -44,13 +44,6 @@ func specURL(filePath string) *url.URL {
 // through the same reader, so that one URL is allowed as well: the caller
 // named it.
 func newLoader(filePath string, allowRemoteRefsFrom []string, client *http.Client) *openapi3.Loader {
-	if allowRemoteRefsFrom == nil {
-		// On the 2.8 release line an unset list keeps the behaviour of earlier
-		// releases, which followed every remote reference. An explicit empty
-		// list refuses them all. This lives here, not in loadSwagger, so that
-		// the loader built after an overlay is applied gets the same default.
-		allowRemoteRefsFrom = []string{"*"}
-	}
 	if u := specURL(filePath); u != nil {
 		// Listed like any other entry: the document URL without a fragment,
 		// which is what the reader compares against.
@@ -123,11 +116,17 @@ func LoadSwaggerWithCircularReferenceCount(filePath string, _ int) (swagger *ope
 }
 
 type LoadSwaggerWithOverlayOpts struct {
-	Path   string
+	// Path is the Overlay document to apply. Empty applies none.
+	Path string
+	// Strict fails the load when the target of an Overlay action matches
+	// nothing in the document.
 	Strict bool
+	// LegacyJSONPath reads Overlay targets in the JSONPath dialect that
+	// oapi-codegen used before it moved to RFC 9535 (yaml-jsonpath), by
+	// translating them. See compatibility.overlays-use-yaml-jsonpath.
+	LegacyJSONPath bool
 	// AllowRemoteRefsFrom lists the remote document URLs that external $refs
-	// may be fetched from, see RemoteRefAllowed. nil allows every URL, as
-	// earlier 2.8 releases did; an empty, non-nil list refuses every remote
+	// may be fetched from, see RemoteRefAllowed. Empty refuses every remote
 	// reference.
 	AllowRemoteRefsFrom []string
 }
@@ -146,45 +145,31 @@ func loadSwaggerWithOverlay(filePath string, opts LoadSwaggerWithOverlayOpts, cl
 		return spec, nil
 	}
 
-	// parse out the yaml.Node, which is required by the overlay library
-	buf := &bytes.Buffer{}
-	enc := yaml.NewEncoder(buf)
-	// set to 2 to work around https://github.com/yaml/go-yaml/issues/76
-	enc.SetIndent(2)
-	err = enc.Encode(spec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal spec from %#v as YAML: %w", filePath, err)
-	}
-
-	var node yaml.Node
-	err = yaml.NewDecoder(buf).Decode(&node)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse spec from %#v: %w", filePath, err)
-	}
-
-	overlay, err := loader.LoadOverlay(opts.Path)
+	ov, err := overlay.ParseFile(opts.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Overlay from %#v: %v", opts.Path, err)
 	}
 
-	err = overlay.Validate()
+	err = ov.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("the Overlay in %#v was not valid: %v", opts.Path, err)
 	}
 
-	if opts.Strict {
-		vs, err := overlay.ApplyToStrict(&node)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply Overlay %#v to specification %#v: %v\nAdditionally, the following validation errors were found:\n- %s", opts.Path, filePath, err, strings.Join(vs, "\n- "))
-		}
-	} else {
-		err = overlay.ApplyTo(&node)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply Overlay %#v to specification %#v: %v", opts.Path, filePath, err)
-		}
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal spec from %#v as JSON: %w", filePath, err)
+	}
+	doc, err := overlay.DecodeJSON(specJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse spec from %#v: %w", filePath, err)
 	}
 
-	b, err := yaml.Marshal(&node)
+	doc, err = ov.Apply(doc, overlay.Options{Strict: opts.Strict, LegacyJSONPath: opts.LegacyJSONPath})
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply Overlay %#v to specification %#v: %v", opts.Path, filePath, err)
+	}
+
+	out, err := json.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize Overlay'd specification %#v: %v", opts.Path, err)
 	}
@@ -198,7 +183,7 @@ func loadSwaggerWithOverlay(filePath string, opts LoadSwaggerWithOverlayOpts, cl
 		location = &url.URL{Path: filepath.ToSlash(filePath)}
 	}
 
-	swagger, err = loader.LoadFromDataWithPath(b, location)
+	swagger, err = loader.LoadFromDataWithPath(out, location)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize Overlay'd specification %#v: %v", opts.Path, err)
 	}

@@ -1,0 +1,30 @@
+version: "2"
+
+run:
+  timeout: 120s
+
+linters:
+  enable:
+    - errcheck
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - nakedret
+    - revive
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    goconst:
+      # A literal repeated across table-driven test cases reads better than a
+      # constant the reader has to look up.
+      ignore-tests: true
+    govet:
+      enable:
+        - shadow
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -22,8 +22,8 @@ require (
 	github.com/metal3-io/baremetal-operator/apis v0.14.3
 	github.com/oapi-codegen/nethttp-middleware v1.3.1
 	github.com/oapi-codegen/nullable v1.2.0
-	github.com/oapi-codegen/oapi-codegen/v2 v2.8.2
-	github.com/oapi-codegen/runtime v1.8.0
+	github.com/oapi-codegen/oapi-codegen/v2 v2.9.0
+	github.com/oapi-codegen/runtime v1.9.1
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/openshift-kni/cluster-group-upgrades-operator v0.0.0-20260521142641-57d77ffe2627
@@ -66,7 +66,12 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require go.yaml.in/yaml/v4 v4.0.0 // indirect
+require (
+	github.com/oasdiff/yaml v0.1.3 // indirect
+	github.com/oasdiff/yaml3 v0.0.16 // indirect
+	github.com/theory/jsonpath v0.12.3 // indirect
+	go.yaml.in/yaml/v4 v4.0.0 // indirect
+)
 
 require (
 	cel.dev/expr v0.25.3 // indirect
@@ -83,7 +88,6 @@ require (
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/coreos/go-oidc v2.5.0+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dprotaso/go-yit v0.0.0-20240618133044-5a0af90af097 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
@@ -148,8 +152,6 @@ require (
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
-	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
-	github.com/speakeasy-api/openapi v1.24.0 // indirect
 	github.com/stephenafamo/scan v0.9.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
@@ -157,7 +159,6 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	github.com/wI2L/jsondiff v0.7.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
@@ -180,7 +181,7 @@ require (
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	golang.org/x/tools v0.52.0 // indirect
+	golang.org/x/tools v0.53.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect

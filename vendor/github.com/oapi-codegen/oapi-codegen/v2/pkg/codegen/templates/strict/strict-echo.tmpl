@@ -1,5 +1,8 @@
-type StrictHandlerFunc func(ctx echo.Context, request any) (any, error)
-type StrictMiddlewareFunc func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
+// StrictHandlerFunc and StrictMiddlewareFunc are type aliases rather than
+// distinct named types, so middleware written against one generated package
+// can be shared with every other generated package using the same framework.
+type StrictHandlerFunc = func(ctx {{template "echo.ctxType" .}}, request any) (any, error)
+type StrictMiddlewareFunc = func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
 
 func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc) ServerInterface {
     return &strictHandler{ssi: ssi, middlewares: middlewares}
@@ -14,7 +17,7 @@ type strictHandler struct {
     {{$opid := .OperationId}}
     {{if not .IsAlias}}
     // {{$opid}} operation middleware
-    func (sh *strictHandler) {{.OperationId}}(ctx echo.Context{{genParamArgs .PathParams}}{{if .RequiresParamObject}}, params {{.OperationId}}Params{{end}}) error {
+    func (sh *strictHandler) {{.OperationId}}(ctx {{template "echo.ctxType" .}}{{genParamArgs .PathParams}}{{if .RequiresParamObject}}, params {{.OperationId}}Params{{end}}) error {
         var request {{$opid | ucFirst}}RequestObject
 
         {{range .PathParams -}}
@@ -35,7 +38,7 @@ type strictHandler struct {
                 {{if .IsJSON -}}
                     var body {{$opid}}{{.NameTag}}RequestBody
                     var err error
-                    if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+                    if {{block "strict.echo.binderVar" .}}binder{{end}}, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
                         // A request validator built on kin-openapi's openapi3filter with
                         // KeepValidatedValue leaves the value it validated on the body. Bind
                         // that value, matching member names exactly, so the handler receives
@@ -43,7 +46,7 @@ type strictHandler struct {
                         // Otherwise bind only the request body, so that path and query
                         // parameters are not also bound into the body struct.
                         if vb, ok := ctx.Request().Body.(interface{ ValidatedValue() any }); !ok || runtime.BindJSONValue(vb.ValidatedValue(), &body) != nil {
-                            err = binder.BindBody(ctx, &body)
+                            err = {{block "strict.echo.bindBodyCall" .}}binder.BindBody{{end}}(ctx, &body)
                         }
                     } else {
                         // A custom binder is installed on the Echo instance; defer to it
@@ -62,8 +65,8 @@ type strictHandler struct {
                     } {{if not .Required -}} else { {{end}}
                     request.{{if $multipleBodies}}{{.NameTag}}{{end}}Body = &body
                     {{if not .Required -}} } {{end}}
-                {{else if eq .NameTag "Formdata" -}}
-                    if form, err := ctx.FormParams(); err == nil {
+                {{else if .IsFormdata -}}
+                    if form, err := ctx.{{block "strict.echo.formValues" .}}FormParams{{end}}(); err == nil {
                         var body {{$opid}}{{.NameTag}}RequestBody
                         if err := runtime.BindForm(&body, form, nil, nil); err != nil {
                             return err
@@ -72,7 +75,7 @@ type strictHandler struct {
                     } else {
                         return err
                     }
-                {{else if eq .NameTag "Multipart" -}}
+                {{else if .IsMultipart -}}
                     {{if eq .ContentType "multipart/form-data" -}}
                     if reader, err := ctx.Request().MultipartReader(); err != nil {
                         return err
@@ -88,7 +91,7 @@ type strictHandler struct {
                         request.{{if $multipleBodies}}{{.NameTag}}{{end}}Body = multipart.NewReader(ctx.Request().Body, boundary)
                     }
                     {{end -}}
-                {{else if eq .NameTag "Text" -}}
+                {{else if .IsText -}}
                     data, err := io.ReadAll(ctx.Request().Body)
                     if err != nil {
                         return err
@@ -103,11 +106,11 @@ type strictHandler struct {
                     {{end -}}
                 {{else -}}
                     request.{{if $multipleBodies}}{{.NameTag}}{{end}}Body = ctx.Request().Body
-                {{end}}{{/* if eq .NameTag "JSON" */ -}}
+                {{end}}{{/* if .IsJSON */ -}}
             {{if $multipleBodies}}}{{end}}
         {{end}}{{/* range .Bodies */}}
 
-        handler := func(ctx echo.Context, request interface{}) (interface{}, error){
+        handler := func(ctx {{template "echo.ctxType" .}}, request any) (any, error){
             return sh.ssi.{{.OperationId}}(ctx.Request().Context(), request.({{$opid | ucFirst}}RequestObject))
         }
         for _, middleware := range sh.middlewares {

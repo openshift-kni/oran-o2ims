@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"go/ast"
 	"hash/fnv"
 	"maps"
 	"slices"
@@ -73,22 +74,30 @@ func (pd ParameterDefinition) ZeroValueIsNil() bool {
 		return true
 	}
 
+	// `any` parameters (typeless schemas, bare `type: "null"`, and OpenAPI
+	// 3.1 multi-type unions) have nil as their zero value. Without the nil
+	// check the generated client would pass a nil interface to
+	// StyleParamWithOptions, which panics reflecting on it.
+	if pd.Schema.GoType == "any" {
+		return true
+	}
+
 	return strings.HasPrefix(pd.Schema.GoType, "map[")
 }
 
-// JsonTag generates the JSON annotation to map GoType to json type name. If Parameter
-// Foo is marshaled to json as "foo", this will create the annotation
-// 'json:"foo"'
+// JsonTag generates the struct tag annotation for a parameter field on a
+// strict RequestObject struct. If Parameter Foo is marshaled to json as "foo",
+// this will create the annotation 'json:"foo"'. Tags configured via
+// output-options.struct-tags are rendered too (the legacy yaml-tags flag does
+// not apply to these fields).
 // It also includes any additional struct tags from x-oapi-codegen-extra-tags
 // at the parameter or schema level (parameter-level takes precedence).
 func (pd *ParameterDefinition) JsonTag() string {
-	fieldTags := make(map[string]string)
-
-	if pd.Required {
-		fieldTags["json"] = pd.ParamName
-	} else {
-		fieldTags["json"] = pd.ParamName + ",omitempty"
-	}
+	fieldTags := paramFieldTagGenerator().generateTagsMap(StructTagInfo{
+		FieldName:  pd.ParamName,
+		IsOptional: !pd.Required,
+		OmitEmpty:  !pd.Required,
+	})
 
 	// Merge x-oapi-codegen-extra-tags from schema level first, then parameter level
 	// so that parameter-level takes precedence.
@@ -178,15 +187,31 @@ func (pd *ParameterDefinition) Explode() bool {
 	return *pd.Spec.Explode
 }
 
-// SchemaType returns the first OpenAPI type string for this parameter's schema (e.g. "string", "integer"),
-// or empty string if unavailable.
+// SchemaType returns the single OpenAPI type of this parameter's schema
+// (e.g. "string", "integer") with the OpenAPI 3.1 "null" nullability marker
+// stripped, or empty string when the schema declares no type or a
+// multi-type union (unions are carried by SchemaTypes instead).
 func (pd *ParameterDefinition) SchemaType() string {
 	if pd.Spec.Schema != nil && pd.Spec.Schema.Value != nil && pd.Spec.Schema.Value.Type != nil {
-		if s := pd.Spec.Schema.Value.Type.Slice(); len(s) > 0 {
+		t := schemaPrimaryType(pd.Spec.Schema.Value.Type)
+		if s := t.Slice(); len(s) == 1 {
 			return s[0]
 		}
 	}
 	return ""
+}
+
+// SchemaTypes returns the members of this parameter's OpenAPI 3.1
+// multi-type union (e.g. ["string", "integer"]) with the "null" nullability
+// marker stripped, or nil when the schema declares at most one non-null
+// type. Non-nil only for genuine unions, where the generated bind call
+// passes the list to the runtime (Types option, runtime v1.7.0+) so the
+// value can bind into the parameter's `any` destination.
+func (pd *ParameterDefinition) SchemaTypes() []string {
+	if pd.Spec.Schema == nil || pd.Spec.Schema.Value == nil {
+		return nil
+	}
+	return schemaUnionTypes(pd.Spec.Schema.Value.Type)
 }
 
 // SchemaFormat returns the OpenAPI format string for this parameter's schema (e.g. "byte", "date-time"),
@@ -217,10 +242,26 @@ func (pd ParameterDefinition) GoVariableName() string {
 	return name
 }
 
+// GoName is the Go name of the parameter, and the only place that name is
+// made: everything that declares or refers to the parameter takes it from
+// here.
+//
+// A query, header or cookie parameter is a field of the operation's
+// parameters struct, so it is named as a struct field. A path parameter is a
+// function argument, and a field only of the strict server's request object;
+// it does not take part in the naming of struct fields, which could otherwise
+// turn it into an argument the generated functions already have, such as ctx.
 func (pd ParameterDefinition) GoName() string {
+	if pd.In != "path" {
+		return goFieldName(pd.ParamName, pd.Spec.Extensions)
+	}
+
 	goName := pd.ParamName
 	if extension, ok := pd.Spec.Extensions[extGoName]; ok {
 		if extGoFieldName, err := extParseGoFieldName(extension); err == nil {
+			if explicitNamesVerbatim() {
+				return extGoFieldName
+			}
 			goName = extGoFieldName
 		}
 	}
@@ -253,14 +294,43 @@ func (p ParameterDefinitions) FindByName(name string) *ParameterDefinition {
 // descriptors into a flat list. This makes it a lot easier to traverse the
 // data in the template engine.
 func DescribeParameters(params openapi3.Parameters, path []string) ([]ParameterDefinition, error) {
+	return describeParameters(params, path, false)
+}
+
+// describeParameters is DescribeParameters for operation parameters (shared
+// false) and for parameters shared by a whole path item (shared true), whose
+// path carries no operation name.
+func describeParameters(params openapi3.Parameters, path []string, shared bool) ([]ParameterDefinition, error) {
 	outParams := make([]ParameterDefinition, 0, len(params))
 	for _, paramOrRef := range params {
 		param := paramOrRef.Value
 
-		goType, err := paramToGoType(param, append(path, param.Name))
+		paramPath := append(slices.Clone(path), param.Name)
+		goType, err := paramToGoType(param, paramPath)
 		if err != nil {
 			return nil, fmt.Errorf("error generating type for param (%s): %s",
 				param.Name, err)
+		}
+
+		// An inline oneOf/anyOf parameter is a union struct whose only field
+		// is unexported, so left anonymous it could be neither named nor
+		// built outside the generated package (issue #2560). Name it the way
+		// its members already are, <Op>Params<Name> next to
+		// <Op>Params<Name>0, so it gets the union's methods. A parameter
+		// shared by a path item has no operation name to start from, so its
+		// members are just <Name>0; the union is <Name>Param, since a bare
+		// <Name> such as Id is likely to be a schema's name too.
+		if len(goType.UnionElements) > 0 && goType.RefType == "" && !IsGoTypeReference(paramOrRef.Ref) {
+			typeName := SchemaNameToTypeName(PathToTypeName(slices.Clone(paramPath)))
+			if shared {
+				typeName += "Param"
+			}
+			goType.AdditionalTypes = append(goType.AdditionalTypes, TypeDefinition{
+				TypeName: typeName,
+				JsonName: strings.Join(paramPath, "."),
+				Schema:   goType,
+			})
+			goType.RefType = typeName
 		}
 
 		pd := ParameterDefinition{
@@ -506,7 +576,7 @@ func describeSharedParameters(params openapi3.Parameters, source, token string, 
 		if collides {
 			path = []string{token}
 		}
-		described, err := DescribeParameters(openapi3.Parameters{paramRef}, path)
+		described, err := describeParameters(openapi3.Parameters{paramRef}, path, true)
 		if err != nil {
 			return nil, err
 		}
@@ -605,11 +675,11 @@ type OperationDefinition struct {
 	// appear in the spec rather than sorted (issue #1887). Zero when the
 	// source location is unavailable (e.g. a programmatically-built spec),
 	// in which case route registration falls back to the default order.
-	SpecOrder int
-	Spec      *openapi3.Operation
-	IsAlias             bool   // True when this path is a $ref alias of another path item
-	AliasTarget         string // When IsAlias is true, this is the OperationId of the canonical operation (for route registration to reference the correct wrapper)
-	PathItemRef         string // The path item's $ref (if any); used to qualify externally-loaded schemas referenced from this operation's responses
+	SpecOrder   int
+	Spec        *openapi3.Operation
+	IsAlias     bool   // True when this path is a $ref alias of another path item
+	AliasTarget string // When IsAlias is true, this is the OperationId of the canonical operation (for route registration to reference the correct wrapper)
+	PathItemRef string // The path item's $ref (if any); used to qualify externally-loaded schemas referenced from this operation's responses
 
 	// IsWebhook is true when this OperationDefinition was sourced from
 	// spec.Webhooks (OpenAPI 3.1+). Webhook operations have no path
@@ -672,7 +742,13 @@ func (o OperationDefinition) SourceName() string {
 type ReceiverTemplateData struct {
 	Prefix      string // "Webhook" or "Callback"
 	PrefixLower string // lowercase form of Prefix, for prose
-	Operations  []OperationDefinition
+	// CtxType is the framework context type as it appears in the handler
+	// signature: "echo.Context" vs "*echo.Context" for echo v4/v5, and
+	// "*fiber.Ctx" vs "fiber.Ctx" for fiber v2/v3. Only the echo and fiber
+	// receiver templates read it; the other frameworks' templates embed
+	// their fixed context type directly and leave this empty.
+	CtxType    string
+	Operations []OperationDefinition
 }
 
 // NewReceiverTemplateData builds the template input for the given
@@ -683,6 +759,50 @@ func NewReceiverTemplateData(prefix string, ops []OperationDefinition) ReceiverT
 		PrefixLower: strings.ToLower(prefix),
 		Operations:  ops,
 	}
+}
+
+// InitiatorTemplateData is the input to the shared webhook / callback
+// initiator template. Prefix selects between "Webhook" and "Callback"
+// (and the lowercase form for prose), so a single template handles both
+// the OpenAPI 3.1 webhook and OpenAPI callback client-side initiators.
+type InitiatorTemplateData struct {
+	Prefix      string // "Webhook" or "Callback"
+	PrefixLower string // lowercase form of Prefix, for prose
+	Operations  []OperationDefinition
+}
+
+// NewInitiatorTemplateData builds the template input for the given
+// prefix ("Webhook" or "Callback") and operation list.
+//
+// Initiator operations must not carry path parameters: the initiator
+// takes an opaque targetURL per call, so there is no route template to
+// substitute into, and the generated request builders accept no path
+// arguments while the initiator methods would forward them (producing
+// uncompilable code). Webhook/CallbackOperationDefinitions reject
+// in:path parameters at extraction time; this check is defense in depth
+// for direct callers of the exported API.
+func NewInitiatorTemplateData(prefix string, ops []OperationDefinition) (InitiatorTemplateData, error) {
+	for _, op := range ops {
+		if len(op.PathParams) > 0 {
+			return InitiatorTemplateData{}, fmt.Errorf("%s operation %s has path parameters, which are not supported for %s initiators",
+				strings.ToLower(prefix), op.OperationId, strings.ToLower(prefix))
+		}
+	}
+	return InitiatorTemplateData{
+		Prefix:      prefix,
+		PrefixLower: strings.ToLower(prefix),
+		Operations:  ops,
+	}, nil
+}
+
+// EchoRegisterTemplateData is the input to the shared echo route-
+// registration template. RouteReturnType selects between echo v4's
+// "*echo.Route" and echo v5's "echo.RouteInfo" in the EchoRouter
+// interface method signatures -- the only difference between the two
+// echo versions' registration code.
+type EchoRegisterTemplateData struct {
+	RouteReturnType string
+	Operations      []OperationDefinition
 }
 
 // Params returns the list of all parameters except Path parameters. Path parameters
@@ -877,17 +997,35 @@ func (o *OperationDefinition) GetResponseTypeDefinitions() ([]ResponseTypeDefini
 				contentType := responseRef.Value.Content[contentTypeName]
 				// We can only generate a type if we have a schema:
 				if contentType.Schema != nil {
+					// The content-types mapping (defaults merged with
+					// output-options.content-types) is consulted first; media
+					// types it doesn't cover fall through to the cases below.
+					mappedTag, err := activeContentTypeNameTags().TagFor(contentTypeName)
+					if err != nil {
+						return nil, fmt.Errorf("resolving content-types short name for %s.%s: %w", o.OperationId, responseName, err)
+					}
+
 					var typeName, tag string
 					switch {
+
+					// Mapped media types only get a typed response field when
+					// we know how to deserialize them; anything else is
+					// skipped (the raw body remains available).
+					case mappedTag != "":
+						if !util.IsMediaTypeJson(contentTypeName) &&
+							!slices.Contains(contentTypesJSON, contentTypeName) &&
+							!slices.Contains(contentTypesHalJSON, contentTypeName) &&
+							!slices.Contains(contentTypesYAML, contentTypeName) &&
+							!slices.Contains(contentTypesXML, contentTypeName) {
+							continue
+						}
+						typeName = fmt.Sprintf("%s%s", mappedTag, nameNormalizer(responseName))
+						tag = mappedTag
 
 					// HAL+JSON:
 					case slices.Contains(contentTypesHalJSON, contentTypeName):
 						typeName = fmt.Sprintf("HALJSON%s", nameNormalizer(responseName))
 						tag = "HALJSON"
-					case contentTypeName == "application/json":
-						// if it's the standard application/json
-						typeName = fmt.Sprintf("JSON%s", nameNormalizer(responseName))
-						tag = "JSON"
 					// Vendored JSON
 					case slices.Contains(contentTypesJSON, contentTypeName) || util.IsMediaTypeJson(contentTypeName):
 						baseTypeName := fmt.Sprintf("%s%s", nameNormalizer(contentTypeName), nameNormalizer(responseName))
@@ -934,6 +1072,12 @@ func (o *OperationDefinition) GetResponseTypeDefinitions() ([]ResponseTypeDefini
 						} else {
 							responseSchema.RefType = responseBodyTypeName
 						}
+					}
+					// An inline response of an externally-ref'd path item was
+					// generated in the external document's context, so the
+					// types it names live in the imported package.
+					if !IsGoTypeReference(responseRef.Ref) {
+						ensureExternalRefsInSchema(&responseSchema, o.PathItemRef)
 					}
 
 					td := ResponseTypeDefinition{
@@ -1034,6 +1178,12 @@ type RequestBodyDefinition struct {
 	// Contains encoding options for formdata
 	Encoding map[string]RequestBodyEncoding
 
+	// ExplodedFormArrays lists, sorted, the properties of a form-urlencoded
+	// body which the client serializes with repeated keys (name=a&name=b)
+	// rather than indexed ones (name[0]=a&name[1]=b). See
+	// explodedFormArrays.
+	ExplodedFormArrays []string
+
 	// Deprecated indicates the parent operation is deprecated, so this body
 	// type alias should be marked deprecated too.
 	Deprecated bool
@@ -1122,7 +1272,7 @@ func (r RequestBodyDefinition) Suffix() string {
 
 // IsSupportedByClient returns true if we support this content type for client. Otherwise only generic method will ge generated
 func (r RequestBodyDefinition) IsSupportedByClient() bool {
-	return r.IsJSON() || r.NameTag == "Formdata" || r.NameTag == "Text"
+	return r.IsJSON() || r.IsFormdata() || r.IsText()
 }
 
 // IsJSON returns whether this is a JSON media type, for instance:
@@ -1133,14 +1283,106 @@ func (r RequestBodyDefinition) IsJSON() bool {
 	return util.IsMediaTypeJson(r.ContentType)
 }
 
-// IsSupported returns true if we support this content type for server. Otherwise io.Reader will be generated
+// IsFormdata returns whether this body is form-urlencoded
+func (r RequestBodyDefinition) IsFormdata() bool {
+	return r.ContentType == "application/x-www-form-urlencoded"
+}
+
+// IsMultipart returns whether this body is a multipart media type
+func (r RequestBodyDefinition) IsMultipart() bool {
+	return strings.HasPrefix(r.ContentType, "multipart/")
+}
+
+// IsText returns whether this body is plain text
+func (r RequestBodyDefinition) IsText() bool {
+	return r.ContentType == "text/plain"
+}
+
+// IsSupported returns true if we support this content type for server. Otherwise io.Reader will be generated.
+// Wire-level support is derived from the media type, not from NameTag, so
+// user-configured short names (output-options.content-types) don't change
+// how a body is bound.
 func (r RequestBodyDefinition) IsSupported() bool {
+	return r.IsJSON() || r.IsFormdata() || r.IsMultipart() || r.IsText()
+}
+
+// HasModel returns true when a Go model type is generated for this body —
+// either a built-in supported media type or one matched by
+// output-options.content-types.
+func (r RequestBodyDefinition) HasModel() bool {
 	return r.NameTag != ""
 }
 
 // IsFixedContentType returns true if content type has fixed content type, i.e. contains no "*" symbol
 func (r RequestBodyDefinition) IsFixedContentType() bool {
 	return !strings.Contains(r.ContentType, "*")
+}
+
+// explodedFormArrays returns, sorted, the names of the properties of a
+// form-urlencoded body whose encoding asks for repeated keys: an array of
+// primitives which declares style form, explode true, or both, and nothing to
+// the contrary (form is the default style, and it explodes by default).
+//
+// This is deliberately the one encoding the client honors. Generated servers
+// bind form bodies without looking at the encoding, and repeated keys are the
+// only styled serialization they read back the same as the indexed keys the
+// client writes otherwise. Every other declared encoding is ignored, as it
+// always has been: https://github.com/oapi-codegen/oapi-codegen/issues/2676
+func explodedFormArrays(schema *openapi3.SchemaRef, encodings map[string]*openapi3.Encoding) []string {
+	var names []string
+	if schema == nil {
+		return nil
+	}
+	for name, encoding := range encodings {
+		if encoding == nil || encoding.ContentType != "" {
+			continue
+		}
+		if encoding.Style == "" && encoding.Explode == nil {
+			continue
+		}
+		if encoding.Style != "" && encoding.Style != "form" {
+			continue
+		}
+		if encoding.Explode != nil && !*encoding.Explode {
+			continue
+		}
+		if isArrayOfPrimitives(findProperty(schema.Value, name, 0)) {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// isArrayOfPrimitives reports whether a schema is plainly an array of strings,
+// numbers or booleans, whose Go type is a slice of values that each serialize
+// to a single form value.
+func isArrayOfPrimitives(array *openapi3.Schema) bool {
+	if array == nil {
+		return false
+	}
+	if !array.Type.Is("array") || array.Nullable || array.Extensions[extPropGoType] != nil {
+		return false
+	}
+	if array.Items == nil || array.Items.Value == nil {
+		return false
+	}
+	item := array.Items.Value
+	if item.Nullable || item.Extensions[extPropGoType] != nil {
+		return false
+	}
+	if len(item.OneOf) != 0 || len(item.AnyOf) != 0 || len(item.AllOf) != 0 {
+		return false
+	}
+	switch {
+	case item.Type.Is("string"):
+		// Binary and base64 strings are files and byte slices, not single
+		// values.
+		return item.Format != "binary" && item.Format != "byte"
+	case item.Type.Is("integer"), item.Type.Is("number"), item.Type.Is("boolean"):
+		return true
+	}
+	return false
 }
 
 type RequestBodyEncoding struct {
@@ -1187,6 +1429,89 @@ type ResponseContentDefinition struct {
 	// When we generate type names, we need a Tag for it, such as JSON, in
 	// which case we will produce "Response200JSONContent".
 	NameTag string
+
+	// NeedsBodyWrapper is true when a schema-backed strict response cannot use
+	// its generated Go type directly: as a method receiver, or, for a reusable
+	// response envelope, as an embedded field.
+	NeedsBodyWrapper bool
+}
+
+// responseSchemaNeedsBodyWrapper reports whether the strict response for a
+// schema must carry its body in a Body field. embedded is true when the
+// generated type is a reusable response envelope that operations embed in a
+// struct, rather than a type that operations use as a method receiver.
+func responseSchemaNeedsBodyWrapper(sref *openapi3.SchemaRef, schema Schema, path []string, embedded bool) (bool, error) {
+	return responseSchemaNeedsBodyWrapperSeen(sref, schema, path, embedded, map[string]struct{}{})
+}
+
+func responseSchemaNeedsBodyWrapperSeen(sref *openapi3.SchemaRef, schema Schema, path []string, embedded bool, seenRefs map[string]struct{}) (bool, error) {
+	if goTypeNeedsBodyWrapper(schema.TypeDecl(), embedded) {
+		return true, nil
+	}
+	// x-go-type-name uses a named type that is declared alongside the schema.
+	if td, ok := schema.namedTypeDef(); ok && goTypeNeedsBodyWrapper(td.Schema.TypeDecl(), embedded) {
+		return true, nil
+	}
+	if sref == nil || sref.Value == nil {
+		return false, nil
+	}
+
+	if IsGoTypeReference(sref.Ref) {
+		if _, seen := seenRefs[sref.Ref]; seen {
+			return false, nil
+		}
+		seenRefs[sref.Ref] = struct{}{}
+
+		resolved := *sref.Value
+		resolved.Extensions = combinedSchemaExtensions(sref)
+		resolvedRef := openapi3.NewSchemaRef("", &resolved)
+		resolvedSchema, err := GenerateGoSchema(resolvedRef, path)
+		if err != nil {
+			return false, fmt.Errorf("generating referenced response schema: %w", err)
+		}
+		return responseSchemaNeedsBodyWrapperSeen(resolvedRef, resolvedSchema, path, embedded, seenRefs)
+	}
+
+	// An explicit named x-go-type may be declared by user code in the current
+	// package or an imported package. Its underlying type is unavailable here,
+	// so preserve the existing direct response API.
+	if _, ok := combinedSchemaExtensions(sref)[extPropGoType]; ok {
+		return false, nil
+	}
+
+	// A composition lowered to a referenced member's type is classified by
+	// that member.
+	member, memberSchema, err := loweredToMember(sref.Value, schema.TypeDecl(), func(member *openapi3.SchemaRef) (Schema, error) {
+		return GenerateGoSchema(member, path)
+	})
+	if err != nil {
+		return false, fmt.Errorf("generating composed response schema: %w", err)
+	}
+	if member != nil {
+		return responseSchemaNeedsBodyWrapperSeen(member, memberSchema, path, embedded, seenRefs)
+	}
+
+	return false, nil
+}
+
+// goTypeNeedsBodyWrapper reports whether typeDecl cannot carry a strict
+// response directly. A method receiver cannot be a pointer or an interface
+// type. An embedded field can be an interface, but not a pointer.
+func goTypeNeedsBodyWrapper(typeDecl string, embedded bool) bool {
+	expr, _, ok := parseGoType(typeDecl)
+	if !ok {
+		return false
+	}
+	switch expr := unparen(expr).(type) {
+	case *ast.StarExpr:
+		return true
+	case *ast.InterfaceType:
+		return !embedded
+	case *ast.Ident:
+		return !embedded && (expr.Name == "any" || expr.Name == "error")
+	default:
+		return false
+	}
 }
 
 // TypeDef returns the Go type definition for a request body
@@ -1197,8 +1522,24 @@ func (r ResponseContentDefinition) TypeDef(opID string, statusCode int) *TypeDef
 	}
 }
 
+// IsSupported returns true if we know how to serialize this content type.
+// Otherwise io.Reader will be generated. Wire-level support is derived from
+// the media type, not from NameTag, so user-configured short names
+// (output-options.content-types) don't change how a response is written.
 func (r ResponseContentDefinition) IsSupported() bool {
-	return r.NameTag != ""
+	return r.IsJSON() || r.IsFormdata() || r.IsMultipart() || r.IsText()
+}
+
+// usesSchemaReceiver reports whether a strict response derives its receiver
+// from the response schema rather than a fixed callback or reader type.
+func (r ResponseContentDefinition) usesSchemaReceiver() bool {
+	return r.IsJSON() || r.IsText() || r.IsFormdata()
+}
+
+// CanUseDirectResponseType reports whether the strict response can use its
+// wire type directly instead of exposing a Body field.
+func (r ResponseContentDefinition) CanUseDirectResponseType() bool {
+	return r.IsSupported() && !r.NeedsBodyWrapper
 }
 
 // HasFixedContentType returns true if content type has fixed content type, i.e. contains no "*" symbol
@@ -1221,6 +1562,21 @@ func (r ResponseContentDefinition) IsJSON() bool {
 	return util.IsMediaTypeJson(r.ContentType)
 }
 
+// IsFormdata returns whether this content is form-urlencoded
+func (r ResponseContentDefinition) IsFormdata() bool {
+	return r.ContentType == "application/x-www-form-urlencoded"
+}
+
+// IsMultipart returns whether this content is a multipart media type
+func (r ResponseContentDefinition) IsMultipart() bool {
+	return strings.HasPrefix(r.ContentType, "multipart/")
+}
+
+// IsText returns whether this content is plain text
+func (r ResponseContentDefinition) IsText() bool {
+	return r.ContentType == "text/plain"
+}
+
 // IsStreamingContentType reports whether this response's media type matches
 // any configured streaming-content-types pattern (defaults merged with
 // OutputOptions.StreamingContentTypes). Templates use this to emit a
@@ -1235,9 +1591,14 @@ func (r ResponseContentDefinition) IsStreamingContentType() bool {
 }
 
 type ResponseHeaderDefinition struct {
-	Name              string
-	GoName            string
-	Schema            Schema
+	Name   string
+	GoName string
+	Schema Schema
+	// Style and Explode mirror the serialization controls on the OpenAPI header
+	// object. A response header is always serialized as if it were `in: header`,
+	// so these default to "simple" / false when the spec omits them.
+	Style             string
+	Explode           bool
 	Required          bool
 	Nullable          bool
 	Deprecated        bool
@@ -1288,15 +1649,28 @@ func (h ResponseHeaderDefinition) IsNullable() bool {
 	return globalState.options.OutputOptions.NullableType && h.Nullable
 }
 
-// SchemaType returns the first OpenAPI type string for this header's schema
-// (e.g. "string", "integer"), or empty string if unavailable.
+// SchemaType returns the single OpenAPI type of this header's schema
+// (e.g. "string", "integer") with the OpenAPI 3.1 "null" nullability marker
+// stripped, or empty string when the schema declares no type or a
+// multi-type union (unions are carried by SchemaTypes instead).
 func (h ResponseHeaderDefinition) SchemaType() string {
 	if h.Schema.OAPISchema != nil && h.Schema.OAPISchema.Type != nil {
-		if s := h.Schema.OAPISchema.Type.Slice(); len(s) > 0 {
+		t := schemaPrimaryType(h.Schema.OAPISchema.Type)
+		if s := t.Slice(); len(s) == 1 {
 			return s[0]
 		}
 	}
 	return ""
+}
+
+// SchemaTypes returns the members of this header's OpenAPI 3.1 multi-type
+// union with the "null" nullability marker stripped, or nil when the schema
+// declares at most one non-null type. See ParameterDefinition.SchemaTypes.
+func (h ResponseHeaderDefinition) SchemaTypes() []string {
+	if h.Schema.OAPISchema == nil {
+		return nil
+	}
+	return schemaUnionTypes(h.Schema.OAPISchema.Type)
 }
 
 // SchemaFormat returns the OpenAPI format string for this header's schema
@@ -1327,6 +1701,15 @@ func FilterParameterDefinitionByType(params []ParameterDefinition, in string) []
 // spec built in memory or one whose loader did not record origins.
 func pathItemSourceLine(pathItem *openapi3.PathItem) int {
 	if pathItem == nil || pathItem.Origin == nil || pathItem.Origin.Key == nil {
+		return 0
+	}
+	// kin-openapi >= v0.143.0 calls attachOriginToResolved for $ref-resolved
+	// path items, giving them an Origin from the *external* file rather than
+	// the base spec. Those line numbers are meaningless for base-spec
+	// declaration order, so treat them as unavailable (return 0), which lets
+	// the stable SortedMapKeys alphabetical order take over — matching the
+	// pre-v0.143.0 behaviour.
+	if pathItem.Ref != "" && !strings.HasPrefix(pathItem.Ref, "#") {
 		return 0
 	}
 	return pathItem.Origin.Key.Line
@@ -1591,6 +1974,15 @@ func WebhookOperationDefinitions(swagger *openapi3.T) ([]OperationDefinition, er
 				return nil, err
 			}
 
+			// The initiator sends to an opaque caller-supplied target URL, so
+			// there is no route template to substitute a path parameter into.
+			// Rejecting it here beats silently dropping it, which would send
+			// requests to a URL that still contains the placeholder.
+			if pathParams := FilterParameterDefinitionByType(allParams, "path"); len(pathParams) > 0 {
+				return nil, fmt.Errorf("webhook %q operation %s declares path parameter %q: path parameters are not supported for webhooks",
+					webhookName, opName, pathParams[0].ParamName)
+			}
+
 			bodyDefinitions, typeDefinitions, err := GenerateBodyDefinitions(operationId, op.RequestBody, pathItem.Ref)
 			if err != nil {
 				return nil, fmt.Errorf("error generating body definitions for webhook %q: %w", webhookName, err)
@@ -1733,6 +2125,15 @@ func CallbackOperationDefinitions(swagger *openapi3.T) ([]OperationDefinition, e
 							return nil, err
 						}
 
+						// See the matching check in WebhookOperationDefinitions:
+						// the initiator's target URL is opaque, so a path
+						// parameter has nowhere to go and must not be dropped
+						// silently.
+						if pathParams := FilterParameterDefinitionByType(allParams, "path"); len(pathParams) > 0 {
+							return nil, fmt.Errorf("callback %q operation %s declares path parameter %q: path parameters are not supported for callbacks",
+								callbackName, opName, pathParams[0].ParamName)
+						}
+
 						bodyDefinitions, typeDefinitions, err := GenerateBodyDefinitions(operationId, op.RequestBody, cbPathItem.Ref)
 						if err != nil {
 							return nil, fmt.Errorf("error generating body definitions for callback %q: %w", callbackName, err)
@@ -1821,34 +2222,36 @@ func GenerateBodyDefinitions(operationID string, bodyOrRef *openapi3.RequestBody
 
 	for _, contentType := range SortedMapKeys(body.Content) {
 		content := body.Content[contentType]
-		var tag string
-		var defaultBody bool
 
-		switch {
-		case contentType == "application/json":
-			tag = "JSON"
-			defaultBody = true
-		case util.IsMediaTypeJson(contentType):
-			tag = mediaTypeToCamelCase(contentType)
-		case strings.HasPrefix(contentType, "multipart/"):
-			tag = "Multipart"
-		case contentType == "application/x-www-form-urlencoded":
-			tag = "Formdata"
-		case contentType == "text/plain":
-			tag = "Text"
-		default:
-			bd := RequestBodyDefinition{
-				Required:    body.Required,
-				ContentType: contentType,
+		// application/json stays the unsuffixed default body even when
+		// renamed via output-options.content-types.
+		defaultBody := contentType == "application/json"
+
+		// The content-types mapping (defaults merged with
+		// output-options.content-types) names the body type; vendored JSON
+		// media types it doesn't cover get a name derived from the media
+		// type, and anything else is passed through untyped.
+		tag, err := activeContentTypeNameTags().TagFor(contentType)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolving content-types short name for %s: %w", operationID, err)
+		}
+		if tag == "" {
+			if util.IsMediaTypeJson(contentType) {
+				tag = mediaTypeToCamelCase(contentType)
+			} else {
+				bd := RequestBodyDefinition{
+					Required:    body.Required,
+					ContentType: contentType,
+				}
+				bodyDefinitions = append(bodyDefinitions, bd)
+				continue
 			}
-			bodyDefinitions = append(bodyDefinitions, bd)
-			continue
 		}
 
 		bodyTypeName := operationID + tag + "Body"
 		bodySchema, err := GenerateGoSchema(content.Schema, []string{bodyTypeName})
 		if err != nil {
-			return nil, nil, fmt.Errorf("error generating request body definition: %w", err)
+			return nil, nil, fmt.Errorf("error generating request body definition for %s (%s): %w", operationID, contentType, err)
 		}
 
 		// If the body is a pre-defined type
@@ -1885,6 +2288,7 @@ func GenerateBodyDefinitions(operationID string, bodyOrRef *openapi3.RequestBody
 				td := TypeDefinition{
 					TypeName: bodyTypeName,
 					Schema:   bodySchema,
+					Comment:  fmt.Sprintf("// %s defines body for %s for %s ContentType.", bodyTypeName, operationID, contentType),
 				}
 				typeDefinitions = append(typeDefinitions, td)
 				// The body schema now is a reference to a type
@@ -1905,6 +2309,9 @@ func GenerateBodyDefinitions(operationID string, bodyOrRef *openapi3.RequestBody
 			for k, v := range content.Encoding {
 				encoding := RequestBodyEncoding{ContentType: v.ContentType, Style: v.Style, Explode: v.Explode}
 				bd.Encoding[k] = encoding
+			}
+			if bd.IsFormdata() {
+				bd.ExplodedFormArrays = explodedFormArrays(content.Schema, content.Encoding)
 			}
 		}
 
@@ -1930,23 +2337,35 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 		}
 		response := responseOrRef.Value
 
+		// Reusable components.responses are generated with no operation
+		// (see the GenerateResponseDefinitions("", ...) call in Generate),
+		// and the map key is then a response component name rather than a
+		// status code. Name it alone instead of qualifying it with an empty
+		// operation, which would read as a leading ".".
+		responseLabel := statusCode
+		if operationID != "" {
+			responseLabel = operationID + "." + statusCode
+		}
+
 		var responseContentDefinitions []ResponseContentDefinition
 
 		for _, contentType := range SortedMapKeys(response.Content) {
 			content := response.Content[contentType]
-			var tag string
-			switch {
-			case contentType == "application/json":
-				tag = "JSON"
-			case util.IsMediaTypeJson(contentType):
+
+			// The content-types mapping (defaults merged with
+			// output-options.content-types) names the response content;
+			// vendored JSON media types it doesn't cover get a name derived
+			// from the media type, and anything else is passed through
+			// untyped. Wire-level handling always follows from the media
+			// type itself, not the name.
+			tag, err := activeContentTypeNameTags().TagFor(contentType)
+			if err != nil {
+				return nil, fmt.Errorf("resolving content-types short name for %s.%s: %w", operationID, statusCode, err)
+			}
+			if tag == "" && util.IsMediaTypeJson(contentType) {
 				tag = mediaTypeToCamelCase(contentType)
-			case contentType == "application/x-www-form-urlencoded":
-				tag = "Formdata"
-			case strings.HasPrefix(contentType, "multipart/"):
-				tag = "Multipart"
-			case contentType == "text/plain":
-				tag = "Text"
-			default:
+			}
+			if tag == "" {
 				rcd := ResponseContentDefinition{
 					ContentType: contentType,
 				}
@@ -1964,7 +2383,7 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 			responseBodyTypeName := responseTypeName + "Body"
 			contentSchema, err := GenerateGoSchema(content.Schema, []string{responseBodyTypeName})
 			if err != nil {
-				return nil, fmt.Errorf("error generating request body definition: %w", err)
+				return nil, fmt.Errorf("error generating response body definition for %s (%s): %w", responseLabel, contentType, err)
 			}
 
 			// Hoist inline response-root schemas that need method-emitting
@@ -1979,16 +2398,48 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 			// When the operation came from an externally-ref'd path item,
 			// the imported package generated the same hoisted name, so we
 			// reference it instead of redeclaring locally.
-			if !IsGoTypeReference(responseOrRef.Ref) && contentSchema.RefType == "" &&
+			//
+			// A response that lives in components/responses is named once,
+			// by the model pass (GenerateTypesForResponses), and everything
+			// else must point at that name rather than hoist a second copy
+			// (issue #2539). That applies both when we are generating the
+			// component envelopes themselves (operationID is empty and
+			// statusCode is the component name) and when an operation
+			// reaches the response through `$ref`. The model pass only
+			// declares JSON content, so only JSON media types can be
+			// redirected this way.
+			componentTypeName := ""
+			if externalPkg == "" && util.IsMediaTypeJson(contentType) {
+				switch {
+				case responseOrRef.Ref != "":
+					// An operation (or another component) reaching a
+					// components/responses entry through `$ref`. Resolve the
+					// entry so we pick up exactly the name the model pass
+					// gave it (x-go-name, resolve-type-name-collisions, ...).
+					componentTypeName, err = componentResponseRefTypeName(responseOrRef.Ref, contentType)
+				case operationID == "":
+					// Generating the component's own envelope.
+					componentTypeName, err = componentResponseTypeName(statusCode, responseOrRef, contentType)
+				}
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if contentSchema.RefType == "" && (componentTypeName != "" || !IsGoTypeReference(responseOrRef.Ref)) &&
 				(len(contentSchema.UnionElements) != 0 || contentSchema.HasAdditionalProperties ||
 					(globalState.options.OutputOptions.GenerateTypesForAnonymousSchemas && len(contentSchema.Properties) > 0)) {
-				if externalPkg != "" {
+				switch {
+				case externalPkg != "":
 					contentSchema.RefType = fmt.Sprintf("%s.%s", externalPkg, responseBodyTypeName)
-				} else {
+				case componentTypeName != "":
+					contentSchema.RefType = componentTypeName
+				default:
 					contentSchema.AdditionalTypes = append(contentSchema.AdditionalTypes, TypeDefinition{
 						TypeName: responseBodyTypeName,
 						JsonName: responseBodyTypeName,
 						Schema:   contentSchema,
+						Comment:  fmt.Sprintf("// %s defines the %s response body for %s for %s ContentType.", responseBodyTypeName, statusCode, operationID, contentType),
 					})
 					contentSchema.RefType = responseBodyTypeName
 				}
@@ -1999,6 +2450,17 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 				NameTag:     tag,
 				Schema:      contentSchema,
 			}
+			if rcd.usesSchemaReceiver() {
+				// A components/responses envelope is embedded in the response
+				// struct of each operation that reaches it through $ref, so it
+				// is never a method receiver itself. A text envelope is the
+				// exception: the operation redeclares it as its receiver type.
+				embedded := (operationID == "" || responseOrRef.Ref != "") && !rcd.IsText()
+				rcd.NeedsBodyWrapper, err = responseSchemaNeedsBodyWrapper(content.Schema, contentSchema, []string{responseBodyTypeName}, embedded)
+				if err != nil {
+					return nil, fmt.Errorf("determining response body representation: %w", err)
+				}
+			}
 
 			responseContentDefinitions = append(responseContentDefinitions, rcd)
 		}
@@ -2008,7 +2470,7 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 			header := response.Headers[headerName]
 			contentSchema, err := GenerateGoSchema(header.Value.Schema, []string{})
 			if err != nil {
-				return nil, fmt.Errorf("error generating response header definition: %w", err)
+				return nil, fmt.Errorf("error generating response header definition for %s header %q: %w", responseLabel, headerName, err)
 			}
 			// When the header component itself is an external `$ref` (it lives
 			// in another file) and its schema references a named type, that
@@ -2028,10 +2490,23 @@ func GenerateResponseDefinitions(operationID string, responses map[string]*opena
 			if header.Value.Schema != nil {
 				nullable = schemaIsNullable(header.Value.Schema.Value)
 			}
+			// A header object carries the same style/explode controls as a
+			// parameter, but has no `in` field: it is implicitly `in: header`,
+			// which defaults to "simple" and explode=false.
+			style := header.Value.Style
+			if style == "" {
+				style = "simple"
+			}
+			var explode bool
+			if header.Value.Explode != nil {
+				explode = *header.Value.Explode
+			}
 			headerDefinition := ResponseHeaderDefinition{
 				Name:     headerName,
 				GoName:   SchemaNameToTypeName(headerName),
 				Schema:   contentSchema,
+				Style:    style,
+				Explode:  explode,
 				Required: header.Value.Required || globalState.options.Compatibility.HeadersImplicitlyRequired,
 				Nullable: nullable,
 			}
@@ -2115,16 +2590,32 @@ func GenerateTypeDefsForOperation(op OperationDefinition) []TypeDefinition {
 		typeDefs = append(typeDefs, param.Schema.AdditionalTypes...)
 	}
 
+	// Types hoisted out of bodies (inline union members, nested objects, ...)
+	// are rendered by the same template as the parameter types, whose default
+	// comment says "defines parameters for"; describe them as models instead.
 	for _, body := range op.Bodies {
-		typeDefs = append(typeDefs, body.Schema.AdditionalTypes...)
+		typeDefs = append(typeDefs, withModelComments(body.Schema.AdditionalTypes)...)
 	}
 
 	for _, resp := range op.Responses {
 		for _, content := range resp.Contents {
-			typeDefs = append(typeDefs, content.Schema.AdditionalTypes...)
+			typeDefs = append(typeDefs, withModelComments(content.Schema.AdditionalTypes)...)
 		}
 	}
 	return typeDefs
+}
+
+// withModelComments returns copies of typeDefs in which every type without a
+// Comment gets the doc comment component schemas get, "X defines model for Y.".
+func withModelComments(typeDefs []TypeDefinition) []TypeDefinition {
+	out := make([]TypeDefinition, len(typeDefs))
+	for i, td := range typeDefs {
+		if td.Comment == "" {
+			td.Comment = fmt.Sprintf("// %s defines model for %s.", td.TypeName, td.JsonName)
+		}
+		out[i] = td
+	}
+	return out
 }
 
 // GenerateParamsTypes defines the schema for a parameters definition object
@@ -2168,6 +2659,12 @@ func GenerateParamsTypes(op OperationDefinition) []TypeDefinition {
 			NeedsFormTag:  param.Style() == "form",
 			Extensions:    extensions,
 			Deprecated:    param.Spec.Deprecated,
+			// The field is read as params.<GoName> by the client and the
+			// servers, so that is its name. Deriving it again from the
+			// property would not always give the same one: the extensions
+			// above include those of the parameter's schema, whose x-go-name
+			// names the schema's type and not this field.
+			resolvedGoFieldName: param.GoName(),
 		}
 		s.Properties = append(s.Properties, prop)
 	}
@@ -2249,7 +2746,7 @@ func operationsInRegistrationOrder(ops []OperationDefinition) []OperationDefinit
 // all the wrapper functions around our handlers.
 func GenerateIrisServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"iris/iris-interface.tmpl", "iris/iris-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "iris/iris-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
@@ -2263,11 +2760,11 @@ func GenerateIrisServer(t *template.Template, operations []OperationDefinition) 
 // all the wrapper functions around our handlers.
 func GenerateChiServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"chi/chi-interface.tmpl", "chi/chi-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "server-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"chi/chi-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2277,11 +2774,11 @@ func GenerateChiServer(t *template.Template, operations []OperationDefinition) (
 // all the wrapper functions around our handlers.
 func GenerateFiberServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber/fiber-interface.tmpl", "fiber/fiber-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "fiber/fiber-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber/fiber-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2291,11 +2788,11 @@ func GenerateFiberServer(t *template.Template, operations []OperationDefinition)
 // all the wrapper functions around our handlers.
 func GenerateFiberV3Server(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber-v3/fiber-interface.tmpl", "fiber-v3/fiber-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "fiber/fiber-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber-v3/fiber-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"fiber-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2305,11 +2802,12 @@ func GenerateFiberV3Server(t *template.Template, operations []OperationDefinitio
 // all the wrapper functions around our handlers.
 func GenerateEchoServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/echo-interface.tmpl", "echo/echo-wrappers.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "echo/echo-wrappers.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/echo-register.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	registerData := EchoRegisterTemplateData{RouteReturnType: "*echo.Route", Operations: operationsInRegistrationOrder(operations)}
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/echo-register.tmpl"}, t, registerData); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2319,11 +2817,15 @@ func GenerateEchoServer(t *template.Template, operations []OperationDefinition) 
 // all the wrapper functions around our handlers.
 func GenerateEcho5Server(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/v5/echo-interface.tmpl", "echo/v5/echo-wrappers.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "echo/echo-wrappers.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/v5/echo-register.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	// Echo v5's EchoRouter methods return echo.RouteInfo instead of v4's
+	// *echo.Route; the shared echo/echo-register.tmpl is parameterized on
+	// that return type.
+	registerData := EchoRegisterTemplateData{RouteReturnType: "echo.RouteInfo", Operations: operationsInRegistrationOrder(operations)}
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"echo/echo-register.tmpl"}, t, registerData); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2333,7 +2835,7 @@ func GenerateEcho5Server(t *template.Template, operations []OperationDefinition)
 // all the wrapper functions around our handlers.
 func GenerateGinServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"gin/gin-interface.tmpl", "gin/gin-wrappers.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "gin/gin-wrappers.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
@@ -2347,11 +2849,11 @@ func GenerateGinServer(t *template.Template, operations []OperationDefinition) (
 // all the wrapper functions around our handlers.
 func GenerateGorillaServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"gorilla/gorilla-interface.tmpl", "gorilla/gorilla-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "server-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"gorilla/gorilla-register.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -2361,43 +2863,63 @@ func GenerateGorillaServer(t *template.Template, operations []OperationDefinitio
 // all the wrapper functions around our handlers.
 func GenerateStdHTTPServer(t *template.Template, operations []OperationDefinition) (string, error) {
 	var buf bytes.Buffer
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"stdhttp/std-http-interface.tmpl", "stdhttp/std-http-middleware.tmpl"}, t, operations); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-interface.tmpl", "server-middleware.tmpl"}, t, operations); err != nil {
 		return "", err
 	}
 	// Route registration follows spec-declaration order (issue #1887).
-	if err := GenerateTemplatesIntoBuffer(&buf, []string{"stdhttp/std-http-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
+	if err := GenerateTemplatesIntoBuffer(&buf, []string{"server-handler.tmpl"}, t, operationsInRegistrationOrder(operations)); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
 }
 
-func GenerateStrictServer(t *template.Template, operations []OperationDefinition, opts Configuration) (string, error) {
+func GenerateStrictServer(t *template.Template, serverTemplates map[string]*template.Template, operations []OperationDefinition, opts Configuration) (string, error) {
 
-	var templates []string
-
-	if opts.Generate.ChiServer || opts.Generate.GorillaServer || opts.Generate.StdHTTPServer {
-		templates = append(templates, "strict/strict-interface.tmpl", "strict/strict-http.tmpl")
-	}
-	if opts.Generate.EchoServer {
-		templates = append(templates, "strict/strict-interface.tmpl", "strict/strict-echo.tmpl")
-	}
-	if opts.Generate.GinServer {
-		templates = append(templates, "strict/strict-interface.tmpl", "strict/strict-gin.tmpl")
-	}
-	if opts.Generate.FiberServer {
-		templates = append(templates, "strict/strict-fiber-interface.tmpl", "strict/strict-fiber.tmpl")
-	}
-	if opts.Generate.FiberV3Server {
-		templates = append(templates, "strict/strict-fiber-v3-interface.tmpl", "strict/strict-fiber-v3.tmpl")
-	}
-	if opts.Generate.IrisServer {
-		templates = append(templates, "strict/strict-iris-interface.tmpl", "strict/strict-iris.tmpl")
-	}
-	if opts.Generate.Echo5Server {
-		templates = append(templates, "strict/strict-interface.tmpl", "strict/strict-echo5.tmpl")
+	// Each strict framework renders its interface + glue templates against a
+	// specific template tree: the base tree for frameworks that use the
+	// skeleton/base defaults, or a per-framework clone (from serverTemplates)
+	// for those that override strict hooks -- fiber v3 swaps the fiber context
+	// type from *fiber.Ctx to fiber.Ctx via the fiber.ctxType hook, so its
+	// interface template must render against the fiber v3 clone.
+	type strictTarget struct {
+		enabled       bool
+		tree          *template.Template
+		interfaceTmpl string
+		glueTmpl      string
 	}
 
-	return GenerateTemplates(templates, t, operations)
+	targets := []strictTarget{
+		{opts.Generate.ChiServer || opts.Generate.GorillaServer || opts.Generate.StdHTTPServer, t, "strict/strict-interface.tmpl", "strict/strict-http.tmpl"},
+		{opts.Generate.EchoServer, t, "strict/strict-interface.tmpl", "strict/strict-echo.tmpl"},
+		{opts.Generate.GinServer, t, "strict/strict-interface.tmpl", "strict/strict-gin.tmpl"},
+		{opts.Generate.FiberServer, t, "strict/strict-fiber-interface.tmpl", "strict/strict-fiber.tmpl"},
+		{opts.Generate.FiberV3Server, serverTemplates["fiberv3"], "strict/strict-fiber-interface.tmpl", "strict/strict-fiber.tmpl"},
+		{opts.Generate.IrisServer, t, "strict/strict-iris-interface.tmpl", "strict/strict-iris.tmpl"},
+		{opts.Generate.Echo5Server, serverTemplates["echo5"], "strict/strict-interface.tmpl", "strict/strict-echo.tmpl"},
+	}
+
+	// Configuration.Validate() enforces that at most one server type is
+	// enabled, so at most one target can be enabled here. Enforce the same
+	// invariant for direct callers of this exported function: every interface
+	// template declares the same package-level names (StrictServerInterface,
+	// <Op>RequestObject, <Op>ResponseObject), with visitor signatures that
+	// differ per framework, so emitting more than one target can never
+	// compile. (chi/gorilla/stdhttp form a single target: they share both
+	// templates, so any one of them yields identical output.)
+	var chosen *strictTarget
+	for i := range targets {
+		if !targets[i].enabled {
+			continue
+		}
+		if chosen != nil {
+			return "", fmt.Errorf("only one server type is supported at a time for strict server generation")
+		}
+		chosen = &targets[i]
+	}
+	if chosen == nil {
+		return "", nil
+	}
+	return GenerateTemplates([]string{chosen.interfaceTmpl, chosen.glueTmpl}, chosen.tree, operations)
 }
 
 func GenerateStrictResponses(t *template.Template, responses []ResponseDefinition) (string, error) {
@@ -2424,7 +2946,11 @@ func GenerateClientWithResponses(t *template.Template, ops []OperationDefinition
 // WebhookOperationDefinitions); path operations are emitted by the
 // regular Client templates.
 func GenerateWebhookInitiator(t *template.Template, webhookOps []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"webhook-initiator.tmpl"}, t, webhookOps)
+	data, err := NewInitiatorTemplateData("Webhook", webhookOps)
+	if err != nil {
+		return "", err
+	}
+	return GenerateTemplates([]string{"initiator.tmpl"}, t, data)
 }
 
 // GenerateCallbackInitiator generates the CallbackInitiator -- the
@@ -2433,7 +2959,11 @@ func GenerateWebhookInitiator(t *template.Template, webhookOps []OperationDefini
 // gathered via CallbackOperationDefinitions, which walk paths/operations/
 // callbacks rather than spec.Webhooks.
 func GenerateCallbackInitiator(t *template.Template, callbackOps []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"callback-initiator.tmpl"}, t, callbackOps)
+	data, err := NewInitiatorTemplateData("Callback", callbackOps)
+	if err != nil {
+		return "", err
+	}
+	return GenerateTemplates([]string{"initiator.tmpl"}, t, data)
 }
 
 // GenerateStdHTTPReceiver renders the merged stdhttp receiver template
@@ -2444,22 +2974,21 @@ func GenerateCallbackInitiator(t *template.Template, callbackOps []OperationDefi
 // query/header parameter binding inline (matching the param-binding
 // machinery used by the path-server middleware).
 func GenerateStdHTTPReceiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"stdhttp/std-http-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	return GenerateTemplates([]string{"receiver-stdlib.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
 }
 
 // GenerateChiReceiver renders the chi receiver template. Chi shares
-// stdhttp's (w, r) handler signature, so the template is structurally
-// identical -- only the file path and (in the future, if needed)
-// framework-specific helpers differ.
+// stdhttp's (w, r) handler signature, so it renders the same shared
+// receiver-stdlib.tmpl template.
 func GenerateChiReceiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"chi/chi-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	return GenerateTemplates([]string{"receiver-stdlib.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
 }
 
 // GenerateGorillaReceiver renders the gorilla/mux receiver template.
-// Gorilla shares stdhttp's (w, r) handler signature, so the template
-// is structurally identical to stdhttp's.
+// Gorilla shares stdhttp's (w, r) handler signature, so it renders the
+// same shared receiver-stdlib.tmpl template.
 func GenerateGorillaReceiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"gorilla/gorilla-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	return GenerateTemplates([]string{"receiver-stdlib.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
 }
 
 // GenerateEchoReceiver renders the echo (v4) receiver template. Echo's
@@ -2468,14 +2997,18 @@ func GenerateGorillaReceiver(t *template.Template, prefix string, ops []Operatio
 // reports them as 400 -- there's no errHandler argument like the
 // stdhttp receiver factory has.
 func GenerateEchoReceiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"echo/echo-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	data := NewReceiverTemplateData(prefix, ops)
+	data.CtxType = "echo.Context"
+	return GenerateTemplates([]string{"echo/echo-receiver.tmpl"}, t, data)
 }
 
-// GenerateEcho5Receiver renders the echo (v5) receiver template. Same
-// shape as v4 but with `*echo.Context` (pointer) -- the only API
+// GenerateEcho5Receiver renders the shared echo receiver template with
+// echo v5's `*echo.Context` (pointer) context type -- the only API
 // difference between echo v4 and v5 that affects the receiver.
 func GenerateEcho5Receiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"echo/v5/echo-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	data := NewReceiverTemplateData(prefix, ops)
+	data.CtxType = "*echo.Context"
+	return GenerateTemplates([]string{"echo/echo-receiver.tmpl"}, t, data)
 }
 
 // GenerateGinReceiver renders the gin receiver template. Gin's handler
@@ -2491,15 +3024,18 @@ func GenerateGinReceiver(t *template.Template, prefix string, ops []OperationDef
 // returned via fiber.NewError so fiber's error chain reports them as
 // 400. Per-handler middleware is not generated; use fiber.App.Use().
 func GenerateFiberReceiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"fiber/fiber-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	data := NewReceiverTemplateData(prefix, ops)
+	data.CtxType = "*fiber.Ctx"
+	return GenerateTemplates([]string{"fiber/fiber-receiver.tmpl"}, t, data)
 }
 
-// GenerateFiberV3Receiver renders the fiber (v3) receiver template.
-// Same shape as v2 but with `fiber.Ctx` (interface, by value) -- the
-// only API difference between fiber v2 and v3 that affects the
-// receiver.
+// GenerateFiberV3Receiver renders the shared fiber receiver template with
+// fiber v3's `fiber.Ctx` (interface, by value) context type -- the only
+// API difference between fiber v2 and v3 that affects the receiver.
 func GenerateFiberV3Receiver(t *template.Template, prefix string, ops []OperationDefinition) (string, error) {
-	return GenerateTemplates([]string{"fiber-v3/fiber-receiver.tmpl"}, t, NewReceiverTemplateData(prefix, ops))
+	data := NewReceiverTemplateData(prefix, ops)
+	data.CtxType = "fiber.Ctx"
+	return GenerateTemplates([]string{"fiber/fiber-receiver.tmpl"}, t, data)
 }
 
 // GenerateIrisReceiver renders the iris receiver template. Iris's

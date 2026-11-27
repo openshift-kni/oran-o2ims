@@ -1,0 +1,80 @@
+version: "2"
+run:
+  build-tags:
+    - compare
+linters:
+  default: all
+  disable:
+    # Too strict.
+    - cyclop # redundant, covered by gocyclo
+    - depguard
+    - exhaustruct
+    - funcorder # new, too much to move around
+    - nestif # redundant, covered by gocyclo
+    - nlreturn
+    - testpackage
+    - varnamelen
+    - wsl
+    - wsl_v5
+    - noinlineerr
+    - gomodguard # Deprecated, replaced by gomodguard_v2
+    - exhaustruct_v5 # Ignores Go rule that vars default to zero value
+  settings:
+    dupword:
+      ignore:
+        - R.
+    errcheck:
+      disable-default-exclusions: false
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    exhaustive:
+      default-signifies-exhaustive: true
+    funlen:
+      ignore-comments: true
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - generic
+        - spec\.PathValue
+        - spec\.FuncExprArg
+        - spec\.Selector
+        - spec\.BasicExpr
+        - spec\.CompVal
+    goconst:
+      ignore-tests: true
+  exclusions:
+    generated: lax
+    rules:
+      # Exclude some linters from running on tests files.
+      - linters:
+          - err113
+          - funlen
+          - maintidx
+          - wrapcheck
+        path: _test\.go
+      - linters:
+          - err113
+        path: registry/funcs\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

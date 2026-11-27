@@ -626,7 +626,8 @@ func collectUnionView(s *openapi3.Schema, view *unionView, mergeAllOf bool, seen
 // ValidateSpec does not call it, so that its result does not depend on an
 // earlier run.
 func allOfMergesUnions() bool {
-	return !globalState.options.Compatibility.OldMergeSchemas
+	version, err := globalState.options.Compatibility.schemaMergingVersion()
+	return err != nil || version != SchemaMergingV1
 }
 
 // checkImplicitMappingKeys validates the discriminator mapping keys the union
