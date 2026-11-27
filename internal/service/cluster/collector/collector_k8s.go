@@ -46,9 +46,10 @@ type K8SDataSource struct {
 }
 
 const (
-	NodeClusterTypeUUIDNamespace     = "b9b24e78-5764-461b-8a0b-55bbe189d3d9"
-	ClusterResourceUUIDNamespace     = "75d74e65-f51f-4195-94ea-e4495b940a8f"
-	ClusterResourceTypeUUIDNamespace = "be370c55-e9fc-4094-81c3-83d6be4a6a14"
+	NodeClusterTypeUUIDNamespace      = "b9b24e78-5764-461b-8a0b-55bbe189d3d9"
+	ClusterResourceUUIDNamespace      = "75d74e65-f51f-4195-94ea-e4495b940a8f"
+	ClusterResourceTypeUUIDNamespace  = "be370c55-e9fc-4094-81c3-83d6be4a6a14"
+	ClusterResourceGroupUUIDNamespace = "12b83569-f334-4129-b7f8-c60487eecbcf"
 )
 
 const (
@@ -219,18 +220,29 @@ func (d *K8SDataSource) convertAgentToClusterResource(agent *v1beta1.Agent) (mod
 		// TODO: add more info for disks, nics, etc...
 	}
 
+	var nodeClusterName string
+	if agent.Spec.ClusterDeploymentName != nil {
+		nodeClusterName = agent.Spec.ClusterDeploymentName.Name
+	}
+
 	// NodeClusterID is filled in by the caller since it has to convert the cluster name to an id.
 	to := models.ClusterResource{
 		ClusterResourceID:     resourceID,
 		ClusterResourceTypeID: resourceTypeID,
 		Name:                  agent.Spec.Hostname,
 		Description:           agent.Spec.Hostname,
-		NodeClusterName:       agent.Spec.ClusterDeploymentName.Name,
+		NodeClusterName:       nodeClusterName,
 		Extensions:            &extensions,
 		ResourceID:            d.getInventoryResourceID(agent),
 		ExternalID:            name,
 		DataSourceID:          d.dataSourceID,
 		GenerationID:          d.generationID,
+	}
+
+	if groupName := agent.Annotations[ctlrutils.NodeGroupAnnotation]; groupName != "" && to.NodeClusterName != "" {
+		groupID := ctlrutils.MakeUUIDFromNames(ClusterResourceGroupUUIDNamespace, d.cloudID, to.NodeClusterName, groupName)
+		to.ClusterResourceGroupID = groupID
+		to.ClusterResourceGroupName = groupName
 	}
 
 	if templateID, found := agent.Labels[ctlrutils.ClusterTemplateArtifactsLabel]; found {
@@ -336,7 +348,7 @@ func (d *K8SDataSource) convertManagedClusterToNodeCluster(cluster *v1.ManagedCl
 		Description:                    cluster.Name,
 		Extensions:                     &extensions,
 		ClusterDistributionDescription: "",  // TODO: not sure where to get this from
-		ClusterResourceGroups:          nil, // TODO: not sure where to get this from
+		ClusterResourceGroups:          nil, // Not known from the ManagedCluster; set by syncClusterResourceGroups from the Agents
 		ExternalID:                     cluster.Name,
 		DataSourceID:                   d.dataSourceID,
 		GenerationID:                   d.generationID,

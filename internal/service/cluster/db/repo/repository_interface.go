@@ -32,6 +32,8 @@ type RepositoryInterface interface {
 	GetClusterResources(context.Context) ([]models.ClusterResource, error)
 	GetClusterResourcesNotIn(context.Context, []any) ([]models.ClusterResource, error)
 	GetClusterResource(context.Context, uuid.UUID) (*models.ClusterResource, error)
+	GetClusterResourceGroups(context.Context) ([]models.ClusterResourceGroup, error)
+	GetClusterResourceGroup(context.Context, uuid.UUID) (*models.ClusterResourceGroup, error)
 	UpsertAlarmDefinitions(context.Context, []models.AlarmDefinition) ([]models.AlarmDefinition, error)
 	DeleteAlarmDefinitionsNotIn(context.Context, []any, uuid.UUID) (int64, error)
 	GetAlarmDefinitionsByAlarmDictionaryID(context.Context, uuid.UUID) ([]models.AlarmDefinition, error)

@@ -469,6 +469,19 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			if hostName != agent.Spec.Hostname {
 				continue
 			}
+			foundNode = true
+
+			// Group membership is available on the AllocatedNode even if the BMH
+			// has not yet been found.
+			if node.Spec.GroupName != "" {
+				if err := t.setAnnotationValue(ctx, &agent, ctlrutils.NodeGroupAnnotation, node.Spec.GroupName); err != nil {
+					return err
+				}
+			} else {
+				t.logger.WarnContext(ctx, "AllocatedNode has no group name",
+					slog.String("allocatedNodeId", node.Name),
+					slog.String("hostname", hostName))
+			}
 
 			// Look up the BMH via the allocated-node label rather than by
 			// BMH status hostname, because the inspected hostname on the BMH
@@ -486,8 +499,6 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 				continue
 			}
 
-			foundNode = true
-
 			err = t.setLabelValue(ctx, &agent, ctlrutils.HardwareManagerNodeIdLabel, string(bmh.UID))
 			if err != nil {
 				return err
@@ -496,14 +507,30 @@ func (t *provisioningRequestReconcilerTask) addPostProvisioningLabels(ctx contex
 			break
 		}
 		if !foundNode {
-			t.logger.WarnContext(
-				ctx,
-				fmt.Sprintf("The corresponding clcm.openshift.io Node not found for the %s/%s Agent",
-					agent.Name, agent.Namespace),
-			)
+			t.logger.WarnContext(ctx, "The corresponding AllocatedNode not found for Agent",
+				slog.String("agent", agent.Name),
+				slog.String("namespace", agent.Namespace),
+				slog.String("hostname", agent.Spec.Hostname))
 		}
 	}
 
+	return nil
+}
+
+// setAnnotationValue sets an annotation on a Kubernetes object.
+func (t *provisioningRequestReconcilerTask) setAnnotationValue(ctx context.Context, object client.Object, key, value string) error {
+	annotations := object.GetAnnotations()
+	if existing, exists := annotations[key]; exists && existing == value {
+		return nil
+	}
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[key] = value
+	object.SetAnnotations(annotations)
+	if err := t.client.Update(ctx, object); err != nil {
+		return fmt.Errorf("failed to set annotation %q on %s/%s: %w", key, object.GetNamespace(), object.GetName(), err)
+	}
 	return nil
 }
 

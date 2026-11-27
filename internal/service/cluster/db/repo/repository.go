@@ -114,6 +114,19 @@ func (r *ClusterRepository) GetClusterResourceType(ctx context.Context, id uuid.
 	return svcutils.Find[models.ClusterResourceType](ctx, r.Db, id)
 }
 
+// GetClusterResourceGroups returns the observed groups in all node clusters.
+func (r *ClusterRepository) GetClusterResourceGroups(ctx context.Context) ([]models.ClusterResourceGroup, error) {
+	return svcutils.FindAll[models.ClusterResourceGroup](ctx, r.Db)
+}
+
+func (r *ClusterRepository) GetClusterResourceGroup(ctx context.Context, id uuid.UUID) (*models.ClusterResourceGroup, error) {
+	return svcutils.Find[models.ClusterResourceGroup](ctx, r.Db, id)
+}
+
+func (r *ClusterRepository) GetNodeClusterResourceGroups(ctx context.Context, id uuid.UUID) ([]models.ClusterResourceGroup, error) {
+	return svcutils.Search[models.ClusterResourceGroup](ctx, r.Db, psql.Quote("node_cluster_id").EQ(psql.Arg(id)))
+}
+
 // GetClusterResources returns the list of ClusterResource records or an empty list if none exist; otherwise an error
 func (r *ClusterRepository) GetClusterResources(ctx context.Context) ([]models.ClusterResource, error) {
 	return svcutils.FindAll[models.ClusterResource](ctx, r.Db)

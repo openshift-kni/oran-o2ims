@@ -220,6 +220,46 @@ func (mr *MockClientInterfaceMockRecorder) GetClusterResource(ctx, clusterResour
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResource", reflect.TypeOf((*MockClientInterface)(nil).GetClusterResource), varargs...)
 }
 
+// GetClusterResourceGroup mocks base method.
+func (m *MockClientInterface) GetClusterResourceGroup(ctx context.Context, clusterResourceGroupId generated.ClusterResourceGroupId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, clusterResourceGroupId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetClusterResourceGroup", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroup indicates an expected call of GetClusterResourceGroup.
+func (mr *MockClientInterfaceMockRecorder) GetClusterResourceGroup(ctx, clusterResourceGroupId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, clusterResourceGroupId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroup", reflect.TypeOf((*MockClientInterface)(nil).GetClusterResourceGroup), varargs...)
+}
+
+// GetClusterResourceGroups mocks base method.
+func (m *MockClientInterface) GetClusterResourceGroups(ctx context.Context, params *generated.GetClusterResourceGroupsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetClusterResourceGroups", varargs...)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroups indicates an expected call of GetClusterResourceGroups.
+func (mr *MockClientInterfaceMockRecorder) GetClusterResourceGroups(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroups", reflect.TypeOf((*MockClientInterface)(nil).GetClusterResourceGroups), varargs...)
+}
+
 // GetClusterResourceType mocks base method.
 func (m *MockClientInterface) GetClusterResourceType(ctx context.Context, clusterResourceTypeId generated.ClusterResourceTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
@@ -581,6 +621,46 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAllVersionsWithRespon
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllVersionsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetAllVersionsWithResponse), varargs...)
+}
+
+// GetClusterResourceGroupWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetClusterResourceGroupWithResponse(ctx context.Context, clusterResourceGroupId generated.ClusterResourceGroupId, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourceGroupResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, clusterResourceGroupId}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetClusterResourceGroupWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetClusterResourceGroupResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroupWithResponse indicates an expected call of GetClusterResourceGroupWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourceGroupWithResponse(ctx, clusterResourceGroupId any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, clusterResourceGroupId}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroupWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetClusterResourceGroupWithResponse), varargs...)
+}
+
+// GetClusterResourceGroupsWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) GetClusterResourceGroupsWithResponse(ctx context.Context, params *generated.GetClusterResourceGroupsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourceGroupsResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetClusterResourceGroupsWithResponse", varargs...)
+	ret0, _ := ret[0].(*generated.GetClusterResourceGroupsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetClusterResourceGroupsWithResponse indicates an expected call of GetClusterResourceGroupsWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourceGroupsWithResponse(ctx, params any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterResourceGroupsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetClusterResourceGroupsWithResponse), varargs...)
 }
 
 // GetClusterResourceTypeWithResponse mocks base method.
