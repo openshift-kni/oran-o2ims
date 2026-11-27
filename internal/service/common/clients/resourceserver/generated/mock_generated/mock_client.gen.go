@@ -15,8 +15,8 @@ import (
 	reflect "reflect"
 
 	types "github.com/oapi-codegen/runtime/types"
-	generated "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/resourceserver/generated"
-	generated0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	generated "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	generated0 "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/resourceserver/generated"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -82,7 +82,7 @@ func (m *MockClientInterface) EXPECT() *MockClientInterfaceMockRecorder {
 }
 
 // CreateSubscription mocks base method.
-func (m *MockClientInterface) CreateSubscription(ctx context.Context, body generated.CreateSubscriptionJSONRequestBody, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateSubscription(ctx context.Context, body generated0.CreateSubscriptionJSONRequestBody, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -102,7 +102,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateSubscription(ctx, body any, req
 }
 
 // CreateSubscriptionWithBody mocks base method.
-func (m *MockClientInterface) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, contentType, body}
 	for _, a := range reqEditors {
@@ -122,7 +122,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateSubscriptionWithBody(ctx, conte
 }
 
 // DeleteSubscription mocks base method.
-func (m *MockClientInterface) DeleteSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) DeleteSubscription(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
@@ -142,7 +142,7 @@ func (mr *MockClientInterfaceMockRecorder) DeleteSubscription(ctx, subscriptionI
 }
 
 // GetAlarmDictionaries mocks base method.
-func (m *MockClientInterface) GetAlarmDictionaries(ctx context.Context, params *generated.GetAlarmDictionariesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAlarmDictionaries(ctx context.Context, params *generated0.GetAlarmDictionariesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -162,7 +162,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAlarmDictionaries(ctx, params any,
 }
 
 // GetAlarmDictionary mocks base method.
-func (m *MockClientInterface) GetAlarmDictionary(ctx context.Context, alarmDictionaryId generated0.AlarmDictionaryId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAlarmDictionary(ctx context.Context, alarmDictionaryId generated.AlarmDictionaryId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, alarmDictionaryId}
 	for _, a := range reqEditors {
@@ -182,7 +182,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAlarmDictionary(ctx, alarmDictiona
 }
 
 // GetAllVersions mocks base method.
-func (m *MockClientInterface) GetAllVersions(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAllVersions(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
@@ -202,7 +202,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAllVersions(ctx any, reqEditors ..
 }
 
 // GetCloudInfo mocks base method.
-func (m *MockClientInterface) GetCloudInfo(ctx context.Context, params *generated.GetCloudInfoParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetCloudInfo(ctx context.Context, params *generated0.GetCloudInfoParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -222,7 +222,7 @@ func (mr *MockClientInterfaceMockRecorder) GetCloudInfo(ctx, params any, reqEdit
 }
 
 // GetDeploymentManager mocks base method.
-func (m *MockClientInterface) GetDeploymentManager(ctx context.Context, deploymentManagerId generated.DeploymentManagerId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetDeploymentManager(ctx context.Context, deploymentManagerId generated0.DeploymentManagerId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, deploymentManagerId}
 	for _, a := range reqEditors {
@@ -242,7 +242,7 @@ func (mr *MockClientInterfaceMockRecorder) GetDeploymentManager(ctx, deploymentM
 }
 
 // GetDeploymentManagers mocks base method.
-func (m *MockClientInterface) GetDeploymentManagers(ctx context.Context, params *generated.GetDeploymentManagersParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetDeploymentManagers(ctx context.Context, params *generated0.GetDeploymentManagersParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -262,7 +262,7 @@ func (mr *MockClientInterfaceMockRecorder) GetDeploymentManagers(ctx, params any
 }
 
 // GetInternalResourceById mocks base method.
-func (m *MockClientInterface) GetInternalResourceById(ctx context.Context, resourceId types.UUID, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetInternalResourceById(ctx context.Context, resourceId types.UUID, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceId}
 	for _, a := range reqEditors {
@@ -282,7 +282,7 @@ func (mr *MockClientInterfaceMockRecorder) GetInternalResourceById(ctx, resource
 }
 
 // GetLocation mocks base method.
-func (m *MockClientInterface) GetLocation(ctx context.Context, globalLocationId generated.GlobalLocationId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetLocation(ctx context.Context, globalLocationId generated0.GlobalLocationId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, globalLocationId}
 	for _, a := range reqEditors {
@@ -302,7 +302,7 @@ func (mr *MockClientInterfaceMockRecorder) GetLocation(ctx, globalLocationId any
 }
 
 // GetLocations mocks base method.
-func (m *MockClientInterface) GetLocations(ctx context.Context, params *generated.GetLocationsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetLocations(ctx context.Context, params *generated0.GetLocationsParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -322,7 +322,7 @@ func (mr *MockClientInterfaceMockRecorder) GetLocations(ctx, params any, reqEdit
 }
 
 // GetMinorVersions mocks base method.
-func (m *MockClientInterface) GetMinorVersions(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetMinorVersions(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
@@ -342,7 +342,7 @@ func (mr *MockClientInterfaceMockRecorder) GetMinorVersions(ctx any, reqEditors 
 }
 
 // GetOCloudSite mocks base method.
-func (m *MockClientInterface) GetOCloudSite(ctx context.Context, oCloudSiteId generated.OCloudSiteId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetOCloudSite(ctx context.Context, oCloudSiteId generated0.OCloudSiteId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, oCloudSiteId}
 	for _, a := range reqEditors {
@@ -362,7 +362,7 @@ func (mr *MockClientInterfaceMockRecorder) GetOCloudSite(ctx, oCloudSiteId any, 
 }
 
 // GetOCloudSites mocks base method.
-func (m *MockClientInterface) GetOCloudSites(ctx context.Context, params *generated.GetOCloudSitesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetOCloudSites(ctx context.Context, params *generated0.GetOCloudSitesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -382,7 +382,7 @@ func (mr *MockClientInterfaceMockRecorder) GetOCloudSites(ctx, params any, reqEd
 }
 
 // GetResource mocks base method.
-func (m *MockClientInterface) GetResource(ctx context.Context, resourcePoolId generated.ResourcePoolId, resourceId generated.ResourceId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResource(ctx context.Context, resourcePoolId generated0.ResourcePoolId, resourceId generated0.ResourceId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId, resourceId}
 	for _, a := range reqEditors {
@@ -402,7 +402,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResource(ctx, resourcePoolId, reso
 }
 
 // GetResourcePool mocks base method.
-func (m *MockClientInterface) GetResourcePool(ctx context.Context, resourcePoolId generated.ResourcePoolId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResourcePool(ctx context.Context, resourcePoolId generated0.ResourcePoolId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId}
 	for _, a := range reqEditors {
@@ -422,7 +422,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResourcePool(ctx, resourcePoolId a
 }
 
 // GetResourcePools mocks base method.
-func (m *MockClientInterface) GetResourcePools(ctx context.Context, params *generated.GetResourcePoolsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResourcePools(ctx context.Context, params *generated0.GetResourcePoolsParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -442,7 +442,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResourcePools(ctx, params any, req
 }
 
 // GetResourceType mocks base method.
-func (m *MockClientInterface) GetResourceType(ctx context.Context, resourceTypeId generated.ResourceTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResourceType(ctx context.Context, resourceTypeId generated0.ResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceTypeId}
 	for _, a := range reqEditors {
@@ -462,7 +462,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResourceType(ctx, resourceTypeId a
 }
 
 // GetResourceTypeAlarmDictionary mocks base method.
-func (m *MockClientInterface) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeId generated.ResourceTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResourceTypeAlarmDictionary(ctx context.Context, resourceTypeId generated0.ResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceTypeId}
 	for _, a := range reqEditors {
@@ -482,7 +482,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResourceTypeAlarmDictionary(ctx, r
 }
 
 // GetResourceTypes mocks base method.
-func (m *MockClientInterface) GetResourceTypes(ctx context.Context, params *generated.GetResourceTypesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResourceTypes(ctx context.Context, params *generated0.GetResourceTypesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -502,7 +502,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResourceTypes(ctx, params any, req
 }
 
 // GetResources mocks base method.
-func (m *MockClientInterface) GetResources(ctx context.Context, resourcePoolId generated.ResourcePoolId, params *generated.GetResourcesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetResources(ctx context.Context, resourcePoolId generated0.ResourcePoolId, params *generated0.GetResourcesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId, params}
 	for _, a := range reqEditors {
@@ -522,7 +522,7 @@ func (mr *MockClientInterfaceMockRecorder) GetResources(ctx, resourcePoolId, par
 }
 
 // GetSubscription mocks base method.
-func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
@@ -542,7 +542,7 @@ func (mr *MockClientInterfaceMockRecorder) GetSubscription(ctx, subscriptionId a
 }
 
 // GetSubscriptions mocks base method.
-func (m *MockClientInterface) GetSubscriptions(ctx context.Context, params *generated.GetSubscriptionsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetSubscriptions(ctx context.Context, params *generated0.GetSubscriptionsParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -585,14 +585,14 @@ func (m *MockClientWithResponsesInterface) EXPECT() *MockClientWithResponsesInte
 }
 
 // CreateSubscriptionWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated.RequestEditorFn) (*generated.CreateSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated0.RequestEditorFn) (*generated0.CreateSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateSubscriptionWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.CreateSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.CreateSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -605,14 +605,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateSubscriptionWithBo
 }
 
 // CreateSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateSubscriptionWithResponse(ctx context.Context, body generated.CreateSubscriptionJSONRequestBody, reqEditors ...generated.RequestEditorFn) (*generated.CreateSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateSubscriptionWithResponse(ctx context.Context, body generated0.CreateSubscriptionJSONRequestBody, reqEditors ...generated0.RequestEditorFn) (*generated0.CreateSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.CreateSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.CreateSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -625,14 +625,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateSubscriptionWithRe
 }
 
 // DeleteSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*generated.DeleteSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*generated0.DeleteSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.DeleteSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.DeleteSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -645,14 +645,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) DeleteSubscriptionWithRe
 }
 
 // GetAlarmDictionariesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAlarmDictionariesWithResponse(ctx context.Context, params *generated.GetAlarmDictionariesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetAlarmDictionariesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAlarmDictionariesWithResponse(ctx context.Context, params *generated0.GetAlarmDictionariesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAlarmDictionariesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAlarmDictionariesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAlarmDictionariesResponse)
+	ret0, _ := ret[0].(*generated0.GetAlarmDictionariesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -665,14 +665,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAlarmDictionariesWith
 }
 
 // GetAlarmDictionaryWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId generated0.AlarmDictionaryId, reqEditors ...generated.RequestEditorFn) (*generated.GetAlarmDictionaryResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId generated.AlarmDictionaryId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAlarmDictionaryResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, alarmDictionaryId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAlarmDictionaryWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAlarmDictionaryResponse)
+	ret0, _ := ret[0].(*generated0.GetAlarmDictionaryResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -685,14 +685,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAlarmDictionaryWithRe
 }
 
 // GetAllVersionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*generated.GetAllVersionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAllVersionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAllVersionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAllVersionsResponse)
+	ret0, _ := ret[0].(*generated0.GetAllVersionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -705,14 +705,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAllVersionsWithRespon
 }
 
 // GetCloudInfoWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetCloudInfoWithResponse(ctx context.Context, params *generated.GetCloudInfoParams, reqEditors ...generated.RequestEditorFn) (*generated.GetCloudInfoResponse, error) {
+func (m *MockClientWithResponsesInterface) GetCloudInfoWithResponse(ctx context.Context, params *generated0.GetCloudInfoParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetCloudInfoResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetCloudInfoWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetCloudInfoResponse)
+	ret0, _ := ret[0].(*generated0.GetCloudInfoResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -725,14 +725,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetCloudInfoWithResponse
 }
 
 // GetDeploymentManagerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId generated.DeploymentManagerId, reqEditors ...generated.RequestEditorFn) (*generated.GetDeploymentManagerResponse, error) {
+func (m *MockClientWithResponsesInterface) GetDeploymentManagerWithResponse(ctx context.Context, deploymentManagerId generated0.DeploymentManagerId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetDeploymentManagerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, deploymentManagerId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetDeploymentManagerWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetDeploymentManagerResponse)
+	ret0, _ := ret[0].(*generated0.GetDeploymentManagerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -745,14 +745,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetDeploymentManagerWith
 }
 
 // GetDeploymentManagersWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetDeploymentManagersWithResponse(ctx context.Context, params *generated.GetDeploymentManagersParams, reqEditors ...generated.RequestEditorFn) (*generated.GetDeploymentManagersResponse, error) {
+func (m *MockClientWithResponsesInterface) GetDeploymentManagersWithResponse(ctx context.Context, params *generated0.GetDeploymentManagersParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetDeploymentManagersResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetDeploymentManagersWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetDeploymentManagersResponse)
+	ret0, _ := ret[0].(*generated0.GetDeploymentManagersResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -765,14 +765,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetDeploymentManagersWit
 }
 
 // GetInternalResourceByIdWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetInternalResourceByIdWithResponse(ctx context.Context, resourceId types.UUID, reqEditors ...generated.RequestEditorFn) (*generated.GetInternalResourceByIdResponse, error) {
+func (m *MockClientWithResponsesInterface) GetInternalResourceByIdWithResponse(ctx context.Context, resourceId types.UUID, reqEditors ...generated0.RequestEditorFn) (*generated0.GetInternalResourceByIdResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetInternalResourceByIdWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetInternalResourceByIdResponse)
+	ret0, _ := ret[0].(*generated0.GetInternalResourceByIdResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -785,14 +785,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetInternalResourceByIdW
 }
 
 // GetLocationWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetLocationWithResponse(ctx context.Context, globalLocationId generated.GlobalLocationId, reqEditors ...generated.RequestEditorFn) (*generated.GetLocationResponse, error) {
+func (m *MockClientWithResponsesInterface) GetLocationWithResponse(ctx context.Context, globalLocationId generated0.GlobalLocationId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetLocationResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, globalLocationId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetLocationWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetLocationResponse)
+	ret0, _ := ret[0].(*generated0.GetLocationResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -805,14 +805,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetLocationWithResponse(
 }
 
 // GetLocationsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetLocationsWithResponse(ctx context.Context, params *generated.GetLocationsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetLocationsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetLocationsWithResponse(ctx context.Context, params *generated0.GetLocationsParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetLocationsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetLocationsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetLocationsResponse)
+	ret0, _ := ret[0].(*generated0.GetLocationsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -825,14 +825,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetLocationsWithResponse
 }
 
 // GetMinorVersionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*generated.GetMinorVersionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*generated0.GetMinorVersionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetMinorVersionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetMinorVersionsResponse)
+	ret0, _ := ret[0].(*generated0.GetMinorVersionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -845,14 +845,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetMinorVersionsWithResp
 }
 
 // GetOCloudSiteWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId generated.OCloudSiteId, reqEditors ...generated.RequestEditorFn) (*generated.GetOCloudSiteResponse, error) {
+func (m *MockClientWithResponsesInterface) GetOCloudSiteWithResponse(ctx context.Context, oCloudSiteId generated0.OCloudSiteId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetOCloudSiteResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, oCloudSiteId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetOCloudSiteWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetOCloudSiteResponse)
+	ret0, _ := ret[0].(*generated0.GetOCloudSiteResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -865,14 +865,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetOCloudSiteWithRespons
 }
 
 // GetOCloudSitesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetOCloudSitesWithResponse(ctx context.Context, params *generated.GetOCloudSitesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetOCloudSitesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetOCloudSitesWithResponse(ctx context.Context, params *generated0.GetOCloudSitesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetOCloudSitesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetOCloudSitesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetOCloudSitesResponse)
+	ret0, _ := ret[0].(*generated0.GetOCloudSitesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -885,14 +885,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetOCloudSitesWithRespon
 }
 
 // GetResourcePoolWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourcePoolWithResponse(ctx context.Context, resourcePoolId generated.ResourcePoolId, reqEditors ...generated.RequestEditorFn) (*generated.GetResourcePoolResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourcePoolWithResponse(ctx context.Context, resourcePoolId generated0.ResourcePoolId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourcePoolResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourcePoolWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourcePoolResponse)
+	ret0, _ := ret[0].(*generated0.GetResourcePoolResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -905,14 +905,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourcePoolWithRespo
 }
 
 // GetResourcePoolsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourcePoolsWithResponse(ctx context.Context, params *generated.GetResourcePoolsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetResourcePoolsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourcePoolsWithResponse(ctx context.Context, params *generated0.GetResourcePoolsParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourcePoolsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourcePoolsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourcePoolsResponse)
+	ret0, _ := ret[0].(*generated0.GetResourcePoolsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -925,14 +925,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourcePoolsWithResp
 }
 
 // GetResourceTypeAlarmDictionaryWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourceTypeAlarmDictionaryWithResponse(ctx context.Context, resourceTypeId generated.ResourceTypeId, reqEditors ...generated.RequestEditorFn) (*generated.GetResourceTypeAlarmDictionaryResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourceTypeAlarmDictionaryWithResponse(ctx context.Context, resourceTypeId generated0.ResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourceTypeAlarmDictionaryResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceTypeId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourceTypeAlarmDictionaryWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourceTypeAlarmDictionaryResponse)
+	ret0, _ := ret[0].(*generated0.GetResourceTypeAlarmDictionaryResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -945,14 +945,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourceTypeAlarmDict
 }
 
 // GetResourceTypeWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourceTypeWithResponse(ctx context.Context, resourceTypeId generated.ResourceTypeId, reqEditors ...generated.RequestEditorFn) (*generated.GetResourceTypeResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourceTypeWithResponse(ctx context.Context, resourceTypeId generated0.ResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourceTypeResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourceTypeId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourceTypeWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourceTypeResponse)
+	ret0, _ := ret[0].(*generated0.GetResourceTypeResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -965,14 +965,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourceTypeWithRespo
 }
 
 // GetResourceTypesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourceTypesWithResponse(ctx context.Context, params *generated.GetResourceTypesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetResourceTypesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourceTypesWithResponse(ctx context.Context, params *generated0.GetResourceTypesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourceTypesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourceTypesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourceTypesResponse)
+	ret0, _ := ret[0].(*generated0.GetResourceTypesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -985,14 +985,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourceTypesWithResp
 }
 
 // GetResourceWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourceWithResponse(ctx context.Context, resourcePoolId generated.ResourcePoolId, resourceId generated.ResourceId, reqEditors ...generated.RequestEditorFn) (*generated.GetResourceResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourceWithResponse(ctx context.Context, resourcePoolId generated0.ResourcePoolId, resourceId generated0.ResourceId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourceResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId, resourceId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourceWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourceResponse)
+	ret0, _ := ret[0].(*generated0.GetResourceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1005,14 +1005,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourceWithResponse(
 }
 
 // GetResourcesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetResourcesWithResponse(ctx context.Context, resourcePoolId generated.ResourcePoolId, params *generated.GetResourcesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetResourcesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetResourcesWithResponse(ctx context.Context, resourcePoolId generated0.ResourcePoolId, params *generated0.GetResourcesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetResourcesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, resourcePoolId, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetResourcesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetResourcesResponse)
+	ret0, _ := ret[0].(*generated0.GetResourcesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1025,14 +1025,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetResourcesWithResponse
 }
 
 // GetSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.GetSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1045,14 +1045,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetSubscriptionWithRespo
 }
 
 // GetSubscriptionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetSubscriptionsWithResponse(ctx context.Context, params *generated.GetSubscriptionsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetSubscriptionsWithResponse(ctx context.Context, params *generated0.GetSubscriptionsParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetSubscriptionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSubscriptionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetSubscriptionsResponse)
+	ret0, _ := ret[0].(*generated0.GetSubscriptionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

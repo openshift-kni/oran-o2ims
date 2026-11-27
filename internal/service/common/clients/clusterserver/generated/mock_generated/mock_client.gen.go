@@ -14,8 +14,8 @@ import (
 	http "net/http"
 	reflect "reflect"
 
-	generated "github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
-	generated0 "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	generated "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	generated0 "github.com/openshift-kni/oran-o2ims/internal/service/common/clients/clusterserver/generated"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -81,7 +81,7 @@ func (m *MockClientInterface) EXPECT() *MockClientInterfaceMockRecorder {
 }
 
 // CreateSubscription mocks base method.
-func (m *MockClientInterface) CreateSubscription(ctx context.Context, body generated.CreateSubscriptionJSONRequestBody, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateSubscription(ctx context.Context, body generated0.CreateSubscriptionJSONRequestBody, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -101,7 +101,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateSubscription(ctx, body any, req
 }
 
 // CreateSubscriptionWithBody mocks base method.
-func (m *MockClientInterface) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) CreateSubscriptionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, contentType, body}
 	for _, a := range reqEditors {
@@ -121,7 +121,7 @@ func (mr *MockClientInterfaceMockRecorder) CreateSubscriptionWithBody(ctx, conte
 }
 
 // DeleteSubscription mocks base method.
-func (m *MockClientInterface) DeleteSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) DeleteSubscription(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
@@ -141,7 +141,7 @@ func (mr *MockClientInterfaceMockRecorder) DeleteSubscription(ctx, subscriptionI
 }
 
 // GetAlarmDictionaries mocks base method.
-func (m *MockClientInterface) GetAlarmDictionaries(ctx context.Context, params *generated.GetAlarmDictionariesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAlarmDictionaries(ctx context.Context, params *generated0.GetAlarmDictionariesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -161,7 +161,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAlarmDictionaries(ctx, params any,
 }
 
 // GetAlarmDictionary mocks base method.
-func (m *MockClientInterface) GetAlarmDictionary(ctx context.Context, alarmDictionaryId generated0.AlarmDictionaryId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAlarmDictionary(ctx context.Context, alarmDictionaryId generated.AlarmDictionaryId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, alarmDictionaryId}
 	for _, a := range reqEditors {
@@ -181,7 +181,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAlarmDictionary(ctx, alarmDictiona
 }
 
 // GetAllVersions mocks base method.
-func (m *MockClientInterface) GetAllVersions(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetAllVersions(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
@@ -201,7 +201,7 @@ func (mr *MockClientInterfaceMockRecorder) GetAllVersions(ctx any, reqEditors ..
 }
 
 // GetClusterResource mocks base method.
-func (m *MockClientInterface) GetClusterResource(ctx context.Context, clusterResourceId generated.ClusterResourceId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetClusterResource(ctx context.Context, clusterResourceId generated0.ClusterResourceId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, clusterResourceId}
 	for _, a := range reqEditors {
@@ -221,7 +221,7 @@ func (mr *MockClientInterfaceMockRecorder) GetClusterResource(ctx, clusterResour
 }
 
 // GetClusterResourceType mocks base method.
-func (m *MockClientInterface) GetClusterResourceType(ctx context.Context, clusterResourceTypeId generated.ClusterResourceTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetClusterResourceType(ctx context.Context, clusterResourceTypeId generated0.ClusterResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, clusterResourceTypeId}
 	for _, a := range reqEditors {
@@ -241,7 +241,7 @@ func (mr *MockClientInterfaceMockRecorder) GetClusterResourceType(ctx, clusterRe
 }
 
 // GetClusterResourceTypes mocks base method.
-func (m *MockClientInterface) GetClusterResourceTypes(ctx context.Context, params *generated.GetClusterResourceTypesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetClusterResourceTypes(ctx context.Context, params *generated0.GetClusterResourceTypesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -261,7 +261,7 @@ func (mr *MockClientInterfaceMockRecorder) GetClusterResourceTypes(ctx, params a
 }
 
 // GetClusterResources mocks base method.
-func (m *MockClientInterface) GetClusterResources(ctx context.Context, params *generated.GetClusterResourcesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetClusterResources(ctx context.Context, params *generated0.GetClusterResourcesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -281,7 +281,7 @@ func (mr *MockClientInterfaceMockRecorder) GetClusterResources(ctx, params any, 
 }
 
 // GetMinorVersions mocks base method.
-func (m *MockClientInterface) GetMinorVersions(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetMinorVersions(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
@@ -301,7 +301,7 @@ func (mr *MockClientInterfaceMockRecorder) GetMinorVersions(ctx any, reqEditors 
 }
 
 // GetNodeCluster mocks base method.
-func (m *MockClientInterface) GetNodeCluster(ctx context.Context, nodeClusterId generated.NodeClusterId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetNodeCluster(ctx context.Context, nodeClusterId generated0.NodeClusterId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterId}
 	for _, a := range reqEditors {
@@ -321,7 +321,7 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeCluster(ctx, nodeClusterId any
 }
 
 // GetNodeClusterType mocks base method.
-func (m *MockClientInterface) GetNodeClusterType(ctx context.Context, nodeClusterTypeId generated.NodeClusterTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetNodeClusterType(ctx context.Context, nodeClusterTypeId generated0.NodeClusterTypeId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterTypeId}
 	for _, a := range reqEditors {
@@ -341,7 +341,7 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeClusterType(ctx, nodeClusterTy
 }
 
 // GetNodeClusterTypeAlarmDictionary mocks base method.
-func (m *MockClientInterface) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeId generated.NodeClusterTypeId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetNodeClusterTypeAlarmDictionary(ctx context.Context, nodeClusterTypeId generated0.NodeClusterTypeId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterTypeId}
 	for _, a := range reqEditors {
@@ -361,7 +361,7 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeClusterTypeAlarmDictionary(ctx
 }
 
 // GetNodeClusterTypes mocks base method.
-func (m *MockClientInterface) GetNodeClusterTypes(ctx context.Context, params *generated.GetNodeClusterTypesParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetNodeClusterTypes(ctx context.Context, params *generated0.GetNodeClusterTypesParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -381,7 +381,7 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeClusterTypes(ctx, params any, 
 }
 
 // GetNodeClusters mocks base method.
-func (m *MockClientInterface) GetNodeClusters(ctx context.Context, params *generated.GetNodeClustersParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetNodeClusters(ctx context.Context, params *generated0.GetNodeClustersParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -401,7 +401,7 @@ func (mr *MockClientInterfaceMockRecorder) GetNodeClusters(ctx, params any, reqE
 }
 
 // GetSubscription mocks base method.
-func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetSubscription(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
@@ -421,7 +421,7 @@ func (mr *MockClientInterfaceMockRecorder) GetSubscription(ctx, subscriptionId a
 }
 
 // GetSubscriptions mocks base method.
-func (m *MockClientInterface) GetSubscriptions(ctx context.Context, params *generated.GetSubscriptionsParams, reqEditors ...generated.RequestEditorFn) (*http.Response, error) {
+func (m *MockClientInterface) GetSubscriptions(ctx context.Context, params *generated0.GetSubscriptionsParams, reqEditors ...generated0.RequestEditorFn) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
@@ -464,14 +464,14 @@ func (m *MockClientWithResponsesInterface) EXPECT() *MockClientWithResponsesInte
 }
 
 // CreateSubscriptionWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated.RequestEditorFn) (*generated.CreateSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateSubscriptionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...generated0.RequestEditorFn) (*generated0.CreateSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, contentType, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateSubscriptionWithBodyWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.CreateSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.CreateSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -484,14 +484,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateSubscriptionWithBo
 }
 
 // CreateSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateSubscriptionWithResponse(ctx context.Context, body generated.CreateSubscriptionJSONRequestBody, reqEditors ...generated.RequestEditorFn) (*generated.CreateSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateSubscriptionWithResponse(ctx context.Context, body generated0.CreateSubscriptionJSONRequestBody, reqEditors ...generated0.RequestEditorFn) (*generated0.CreateSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.CreateSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.CreateSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -504,14 +504,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateSubscriptionWithRe
 }
 
 // DeleteSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*generated.DeleteSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) DeleteSubscriptionWithResponse(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*generated0.DeleteSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "DeleteSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.DeleteSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.DeleteSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -524,14 +524,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) DeleteSubscriptionWithRe
 }
 
 // GetAlarmDictionariesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAlarmDictionariesWithResponse(ctx context.Context, params *generated.GetAlarmDictionariesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetAlarmDictionariesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAlarmDictionariesWithResponse(ctx context.Context, params *generated0.GetAlarmDictionariesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAlarmDictionariesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAlarmDictionariesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAlarmDictionariesResponse)
+	ret0, _ := ret[0].(*generated0.GetAlarmDictionariesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -544,14 +544,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAlarmDictionariesWith
 }
 
 // GetAlarmDictionaryWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId generated0.AlarmDictionaryId, reqEditors ...generated.RequestEditorFn) (*generated.GetAlarmDictionaryResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAlarmDictionaryWithResponse(ctx context.Context, alarmDictionaryId generated.AlarmDictionaryId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAlarmDictionaryResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, alarmDictionaryId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAlarmDictionaryWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAlarmDictionaryResponse)
+	ret0, _ := ret[0].(*generated0.GetAlarmDictionaryResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -564,14 +564,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAlarmDictionaryWithRe
 }
 
 // GetAllVersionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*generated.GetAllVersionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetAllVersionsWithResponse(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*generated0.GetAllVersionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetAllVersionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetAllVersionsResponse)
+	ret0, _ := ret[0].(*generated0.GetAllVersionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -584,14 +584,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetAllVersionsWithRespon
 }
 
 // GetClusterResourceTypeWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId generated.ClusterResourceTypeId, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourceTypeResponse, error) {
+func (m *MockClientWithResponsesInterface) GetClusterResourceTypeWithResponse(ctx context.Context, clusterResourceTypeId generated0.ClusterResourceTypeId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetClusterResourceTypeResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, clusterResourceTypeId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetClusterResourceTypeWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetClusterResourceTypeResponse)
+	ret0, _ := ret[0].(*generated0.GetClusterResourceTypeResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -604,14 +604,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourceTypeWi
 }
 
 // GetClusterResourceTypesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetClusterResourceTypesWithResponse(ctx context.Context, params *generated.GetClusterResourceTypesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourceTypesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetClusterResourceTypesWithResponse(ctx context.Context, params *generated0.GetClusterResourceTypesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetClusterResourceTypesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetClusterResourceTypesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetClusterResourceTypesResponse)
+	ret0, _ := ret[0].(*generated0.GetClusterResourceTypesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -624,14 +624,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourceTypesW
 }
 
 // GetClusterResourceWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetClusterResourceWithResponse(ctx context.Context, clusterResourceId generated.ClusterResourceId, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourceResponse, error) {
+func (m *MockClientWithResponsesInterface) GetClusterResourceWithResponse(ctx context.Context, clusterResourceId generated0.ClusterResourceId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetClusterResourceResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, clusterResourceId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetClusterResourceWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetClusterResourceResponse)
+	ret0, _ := ret[0].(*generated0.GetClusterResourceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -644,14 +644,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourceWithRe
 }
 
 // GetClusterResourcesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetClusterResourcesWithResponse(ctx context.Context, params *generated.GetClusterResourcesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetClusterResourcesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetClusterResourcesWithResponse(ctx context.Context, params *generated0.GetClusterResourcesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetClusterResourcesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetClusterResourcesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetClusterResourcesResponse)
+	ret0, _ := ret[0].(*generated0.GetClusterResourcesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -664,14 +664,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetClusterResourcesWithR
 }
 
 // GetMinorVersionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...generated.RequestEditorFn) (*generated.GetMinorVersionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetMinorVersionsWithResponse(ctx context.Context, reqEditors ...generated0.RequestEditorFn) (*generated0.GetMinorVersionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetMinorVersionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetMinorVersionsResponse)
+	ret0, _ := ret[0].(*generated0.GetMinorVersionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -684,14 +684,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetMinorVersionsWithResp
 }
 
 // GetNodeClusterTypeAlarmDictionaryWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetNodeClusterTypeAlarmDictionaryWithResponse(ctx context.Context, nodeClusterTypeId generated.NodeClusterTypeId, reqEditors ...generated.RequestEditorFn) (*generated.GetNodeClusterTypeAlarmDictionaryResponse, error) {
+func (m *MockClientWithResponsesInterface) GetNodeClusterTypeAlarmDictionaryWithResponse(ctx context.Context, nodeClusterTypeId generated0.NodeClusterTypeId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetNodeClusterTypeAlarmDictionaryResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterTypeId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetNodeClusterTypeAlarmDictionaryWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetNodeClusterTypeAlarmDictionaryResponse)
+	ret0, _ := ret[0].(*generated0.GetNodeClusterTypeAlarmDictionaryResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -704,14 +704,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClusterTypeAlarmD
 }
 
 // GetNodeClusterTypeWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId generated.NodeClusterTypeId, reqEditors ...generated.RequestEditorFn) (*generated.GetNodeClusterTypeResponse, error) {
+func (m *MockClientWithResponsesInterface) GetNodeClusterTypeWithResponse(ctx context.Context, nodeClusterTypeId generated0.NodeClusterTypeId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetNodeClusterTypeResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterTypeId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetNodeClusterTypeWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetNodeClusterTypeResponse)
+	ret0, _ := ret[0].(*generated0.GetNodeClusterTypeResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -724,14 +724,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClusterTypeWithRe
 }
 
 // GetNodeClusterTypesWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetNodeClusterTypesWithResponse(ctx context.Context, params *generated.GetNodeClusterTypesParams, reqEditors ...generated.RequestEditorFn) (*generated.GetNodeClusterTypesResponse, error) {
+func (m *MockClientWithResponsesInterface) GetNodeClusterTypesWithResponse(ctx context.Context, params *generated0.GetNodeClusterTypesParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetNodeClusterTypesResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetNodeClusterTypesWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetNodeClusterTypesResponse)
+	ret0, _ := ret[0].(*generated0.GetNodeClusterTypesResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -744,14 +744,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClusterTypesWithR
 }
 
 // GetNodeClusterWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetNodeClusterWithResponse(ctx context.Context, nodeClusterId generated.NodeClusterId, reqEditors ...generated.RequestEditorFn) (*generated.GetNodeClusterResponse, error) {
+func (m *MockClientWithResponsesInterface) GetNodeClusterWithResponse(ctx context.Context, nodeClusterId generated0.NodeClusterId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetNodeClusterResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeClusterId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetNodeClusterWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetNodeClusterResponse)
+	ret0, _ := ret[0].(*generated0.GetNodeClusterResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -764,14 +764,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClusterWithRespon
 }
 
 // GetNodeClustersWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetNodeClustersWithResponse(ctx context.Context, params *generated.GetNodeClustersParams, reqEditors ...generated.RequestEditorFn) (*generated.GetNodeClustersResponse, error) {
+func (m *MockClientWithResponsesInterface) GetNodeClustersWithResponse(ctx context.Context, params *generated0.GetNodeClustersParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetNodeClustersResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetNodeClustersWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetNodeClustersResponse)
+	ret0, _ := ret[0].(*generated0.GetNodeClustersResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -784,14 +784,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetNodeClustersWithRespo
 }
 
 // GetSubscriptionWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated.SubscriptionId, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionResponse, error) {
+func (m *MockClientWithResponsesInterface) GetSubscriptionWithResponse(ctx context.Context, subscriptionId generated0.SubscriptionId, reqEditors ...generated0.RequestEditorFn) (*generated0.GetSubscriptionResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subscriptionId}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSubscriptionWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetSubscriptionResponse)
+	ret0, _ := ret[0].(*generated0.GetSubscriptionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -804,14 +804,14 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) GetSubscriptionWithRespo
 }
 
 // GetSubscriptionsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetSubscriptionsWithResponse(ctx context.Context, params *generated.GetSubscriptionsParams, reqEditors ...generated.RequestEditorFn) (*generated.GetSubscriptionsResponse, error) {
+func (m *MockClientWithResponsesInterface) GetSubscriptionsWithResponse(ctx context.Context, params *generated0.GetSubscriptionsParams, reqEditors ...generated0.RequestEditorFn) (*generated0.GetSubscriptionsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, params}
 	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetSubscriptionsWithResponse", varargs...)
-	ret0, _ := ret[0].(*generated.GetSubscriptionsResponse)
+	ret0, _ := ret[0].(*generated0.GetSubscriptionsResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

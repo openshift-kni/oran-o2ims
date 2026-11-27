@@ -11,23 +11,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/resourceserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/resourceserver"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/resourceserver/generated"
 )
 
-const (
-	ResourceName             = "Resource"
-	resourceServerURLEnvName = "RESOURCE_SERVER_URL"
-)
+const ResourceName = "Resource"
 
 var _ Client = (*ResourceServer)(nil)
 
@@ -48,29 +44,7 @@ func (r *ResourceServer) Name() string {
 func (r *ResourceServer) Setup(clientset kubernetes.Interface) error {
 	slog.Info("Creating ResourceServer client")
 
-	url := ctlrutils.GetServiceURL(ctlrutils.InventoryResourceServerName)
-
-	// Use for local development
-	resourceServerURL := os.Getenv(resourceServerURLEnvName)
-	if resourceServerURL != "" {
-		url = resourceServerURL
-	}
-
-	// Set up transport
-	tr, err := ctlrutils.GetDefaultBackendTransport()
-	if err != nil {
-		return fmt.Errorf("failed to create http transport: %w", err)
-	}
-
-	hc := http.Client{Transport: tr}
-
-	editor := clients.AuthorizationEditor{
-		Source: clients.NewTokenRequestTokenSource(
-			clientset, constants.DefaultNamespace,
-			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
-			ctlrutils.InventoryResourceServerName),
-	}
-	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(editor.Editor))
+	c, err := resourceserver.NewClient(clientset, serviceAccount)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}

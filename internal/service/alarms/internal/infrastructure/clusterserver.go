@@ -11,24 +11,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
 	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/clusterserver"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/clusterserver/generated"
 )
 
-const (
-	Name = "Cluster"
-
-	clusterServerURLEnvName = "CLUSTER_SERVER_URL"
-)
+const Name = "Cluster"
 
 type NodeCluster = generated.NodeCluster
 type NodeClusterType = generated.NodeClusterType
@@ -51,29 +46,7 @@ func (r *ClusterServer) Name() string {
 func (r *ClusterServer) Setup(clientset kubernetes.Interface) error {
 	slog.Info("Creating ClusterServer client")
 
-	url := ctlrutils.GetServiceURL(ctlrutils.InventoryClusterServerName)
-
-	// Use for local development
-	clusterServerURL := os.Getenv(clusterServerURLEnvName)
-	if clusterServerURL != "" {
-		url = clusterServerURL
-	}
-
-	// Set up transport
-	tr, err := ctlrutils.GetDefaultBackendTransport()
-	if err != nil {
-		return fmt.Errorf("failed to create http transport: %w", err)
-	}
-
-	hc := http.Client{Transport: tr}
-
-	editor := clients.AuthorizationEditor{
-		Source: clients.NewTokenRequestTokenSource(
-			clientset, constants.DefaultNamespace,
-			fmt.Sprintf("%s-%s", constants.DefaultNamespace, ctlrutils.InventoryAlarmServerName),
-			ctlrutils.InventoryClusterServerName),
-	}
-	c, err := generated.NewClientWithResponses(url, generated.WithHTTPClient(&hc), generated.WithRequestEditorFn(editor.Editor))
+	c, err := clusterserver.NewClient(clientset, serviceAccount)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}

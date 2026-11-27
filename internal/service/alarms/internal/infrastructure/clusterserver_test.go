@@ -19,9 +19,9 @@ import (
 	"go.uber.org/mock/gomock"
 
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated"
-	"github.com/openshift-kni/oran-o2ims/internal/service/alarms/internal/infrastructure/clusterserver/generated/mock_generated"
 	commonsgenerated "github.com/openshift-kni/oran-o2ims/internal/service/common/api/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/clusterserver/generated"
+	"github.com/openshift-kni/oran-o2ims/internal/service/common/clients/clusterserver/generated/mock_generated"
 )
 
 type objectIDAssociations struct {
