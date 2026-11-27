@@ -79,12 +79,14 @@ func NewAlertmanagerClient(k8sClient client.Client, amrepo repo.AlarmRepositoryI
 	if caFilePath == "" {
 		caFilePath = constants.DefaultServiceCAFile
 	}
+	// The service account lives in the operator namespace; its name keeps the kustomize name prefix
+	namespace := ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace)
 	return &AMClient{
 		k8sClient:        k8sClient,
 		alarmsRepository: amrepo,
 		infrastructure:   infra,
 		tokenSource: clients.NewTokenRequestTokenSource(
-			clientset, constants.DefaultNamespace,
+			clientset, namespace,
 			fmt.Sprintf("%s-%s", constants.DefaultNamespace, alertmanagerClientSAName),
 			""),
 		alertmanagerHost: alertmanagerHost,
