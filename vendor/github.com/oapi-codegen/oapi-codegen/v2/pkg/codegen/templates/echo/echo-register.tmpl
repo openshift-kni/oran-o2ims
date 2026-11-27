@@ -4,15 +4,21 @@
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
 type EchoRouter interface {
-	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
+	CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+{{- if customHTTPMethods .Operations}}
+	// Add registers a route for an arbitrary HTTP method. It is required
+	// because this API uses the OpenAPI 3.2 QUERY method and/or
+	// additionalOperations, which have no dedicated echo shortcut.
+	Add(method, path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) {{.RouteReturnType}}
+{{- end}}
 }
 
 // RegisterHandlersOptions configures RegisterHandlersWithOptions.
@@ -42,11 +48,11 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 // RegisterHandlersWithOptions registers handlers using the supplied options,
 // including any per-operation middleware.
 func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options RegisterHandlersOptions) {
-{{if .}}
+{{if .Operations}}
     wrapper := ServerInterfaceWrapper{
         Handler: si,
     }
 {{end}}
-{{range .}}router.{{.Method}}(options.BaseURL + {{.Path | swaggerUriToEchoUri | toGoString}}, wrapper.{{.HandlerName}}, options.OperationMiddlewares[{{.MiddlewareKey | toGoString}}]...)
+{{range .Operations}}{{if isCustomHTTPMethod .Method}}router.Add({{.Method | toGoString}}, options.BaseURL + {{.Path | swaggerUriToEchoUri | toGoString}}, wrapper.{{.HandlerName}}, options.OperationMiddlewares[{{.MiddlewareKey | toGoString}}]...){{else}}router.{{.Method}}(options.BaseURL + {{.Path | swaggerUriToEchoUri | toGoString}}, wrapper.{{.HandlerName}}, options.OperationMiddlewares[{{.MiddlewareKey | toGoString}}]...){{end}}
 {{end}}
 }

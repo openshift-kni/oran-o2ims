@@ -160,8 +160,8 @@ func genResponseUnmarshal(op *OperationDefinition) string {
 
 		for _, contentTypeName := range SortedMapKeys {
 
-			// We get "interface{}" when using "anyOf" or "oneOf" (which doesn't work with Go types):
-			if typeDefinition.TypeName == "interface{}" {
+			// We get "any" when using "anyOf" or "oneOf" (which doesn't work with Go types):
+			if typeDefinition.TypeName == "any" {
 				// Unable to unmarshal this, so we leave it out:
 				continue
 			}
@@ -173,7 +173,7 @@ func genResponseUnmarshal(op *OperationDefinition) string {
 			case slices.Contains(contentTypesJSON, contentTypeName) || util.IsMediaTypeJson(contentTypeName):
 				if typeDefinition.ContentTypeName == contentTypeName {
 					caseAction := fmt.Sprintf("var dest %s\n"+
-						"if err := json.Unmarshal(bodyBytes, &dest); err != nil { \n"+
+						"if err := runtime.JSONUnmarshal(bodyBytes, &dest); err != nil { \n"+
 						" return nil, err \n"+
 						"}\n"+
 						"response.%s = &dest",
@@ -429,13 +429,97 @@ func httpMethodConstant(method string) string {
 	}
 }
 
+// isCustomHTTPMethod reports whether method is one of the OpenAPI 3.2
+// additions to the path item: the fixed `query` field (HTTP QUERY) or any
+// key under `additionalOperations`. The OpenAPI 3.0/3.1 methods all have
+// dedicated registration shortcuts on every supported router
+// (router.Get(...), router.GET(...)), whereas these need the router's
+// generic string-method registration (chi.MethodFunc, echo.Add,
+// gin.Handle, fiber.Add, iris.Handle). net/http and gorilla/mux take the
+// method as a string either way.
+func isCustomHTTPMethod(method string) bool {
+	switch method {
+	case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS", "TRACE":
+		return false
+	default:
+		return true
+	}
+}
+
+// customHTTPMethods returns the distinct custom HTTP methods (see
+// isCustomHTTPMethod) used by ops, sorted, so router templates can emit
+// one-time setup per method (e.g. chi.RegisterMethod) before registering
+// routes. Returns nil when the spec uses only standard methods, so the
+// generated code for existing specs does not change.
+func customHTTPMethods(ops []OperationDefinition) []string {
+	seen := map[string]struct{}{}
+	var methods []string
+	for _, op := range ops {
+		if !isCustomHTTPMethod(op.Method) {
+			continue
+		}
+		if _, ok := seen[op.Method]; ok {
+			continue
+		}
+		seen[op.Method] = struct{}{}
+		methods = append(methods, op.Method)
+	}
+	slices.Sort(methods)
+	return methods
+}
+
+// unionTypesFragment renders the Types field of a runtime bind-options
+// literal for an OpenAPI 3.1 multi-type union parameter, e.g.
+// `, Types: []string{"string", "integer"}`. It returns "" for the empty
+// list, so single-type parameters emit no Types field at all: code
+// generated from specs without union parameters stays byte-identical to
+// previous releases and keeps compiling against runtime versions before
+// v1.7.0. Only specs that actually use union parameters pick up the new
+// runtime requirement.
+func unionTypesFragment(types []string) string {
+	if len(types) == 0 {
+		return ""
+	}
+	return ", Types: " + toStringArray(types)
+}
+
+// dict builds a map[string]any from an even-length list of alternating
+// key/value arguments. It lets a template pass more than one named value to a
+// {{template}} invocation (text/template only accepts a single data argument),
+// e.g. {{template "partial" (dict "Headers" $headers "Setter" "w.Header().Set")}}.
+func dict(values ...any) (map[string]any, error) {
+	if len(values)%2 != 0 {
+		return nil, fmt.Errorf("dict requires an even number of arguments, got %d", len(values))
+	}
+	m := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict keys must be strings, got %T", values[i])
+		}
+		m[key] = values[i+1]
+	}
+	return m, nil
+}
+
+// withoutPkgName strips a package qualifier from a Go type name, which gives
+// the field name Go uses when that type is embedded in a struct:
+// externalRef0.FooResponse is embedded as the field FooResponse.
+func withoutPkgName(typeName string) string {
+	if i := strings.LastIndex(typeName, "."); i >= 0 {
+		return typeName[i+1:]
+	}
+	return typeName
+}
+
 // TemplateFunctions is passed to the template engine, and we can call each
 // function here by keyName from the template code.
 var TemplateFunctions = template.FuncMap{
+	"dict":                       dict,
 	"genParamArgs":               genParamArgs,
 	"genParamTypes":              genParamTypes,
 	"genParamNames":              genParamNames,
-	"genParamFmtString":          ReplacePathParamsWithStr,
+	"genPathString":              GenPathString,
 	"swaggerUriToIrisUri":        SwaggerUriToIrisUri,
 	"swaggerUriToEchoUri":        SwaggerUriToEchoUri,
 	"swaggerUriToFiberUri":       SwaggerUriToFiberUri,
@@ -455,13 +539,20 @@ var TemplateFunctions = template.FuncMap{
 	"getResponseTypeDefinitions": getResponseTypeDefinitions,
 	"toStringArray":              toStringArray,
 	"lower":                      strings.ToLower,
+	"hasPrefix":                  strings.HasPrefix,
+	"hasSuffix":                  strings.HasSuffix,
 	"title":                      titleCaser.String,
 	"stripNewLines":              stripNewLines,
 	"sanitizeGoIdentity":         SanitizeGoIdentity,
 	"schemaNameToTypeName":       SchemaNameToTypeName,
 	"toGoString":                 StringToGoString,
 	"toGoComment":                StringWithTypeNameToGoComment,
+	"unionTypes":                 unionTypesFragment,
+	"withoutPkgName":             withoutPkgName,
+	"additionalPropertiesType":   additionalPropertiesType,
 
 	"genServerURLWithVariablesFunctionParams": genServerURLWithVariablesFunctionParams,
 	"httpMethodConstant":                      httpMethodConstant,
+	"isCustomHTTPMethod":                      isCustomHTTPMethod,
+	"customHTTPMethods":                       customHTTPMethods,
 }

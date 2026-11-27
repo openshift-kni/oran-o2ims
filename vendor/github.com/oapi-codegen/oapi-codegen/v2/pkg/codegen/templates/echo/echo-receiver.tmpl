@@ -7,7 +7,7 @@ type {{.Prefix}}ReceiverInterface interface {
 {{range .Operations -}}
 {{.SummaryAsComment ""}}
 // Handle{{.OperationId}}{{$.Prefix}} handles the {{.Method}} {{$.PrefixLower}} for {{.SourceName}}.
-Handle{{.OperationId}}{{$.Prefix}}(ctx echo.Context{{if .RequiresParamObject}}, params {{.OperationId}}Params{{end}}) error
+Handle{{.OperationId}}{{$.Prefix}}(ctx {{$.CtxType}}{{if .RequiresParamObject}}, params {{.OperationId}}Params{{end}}) error
 {{end}}
 }
 
@@ -20,7 +20,7 @@ Handle{{.OperationId}}{{$.Prefix}}(ctx echo.Context{{if .RequiresParamObject}}, 
 // error-handling chain reports them as 400. Middlewares are applied in
 // the order provided -- the last argument becomes the outermost wrapper.
 func {{$opid}}{{$.Prefix}}Handler(si {{$.Prefix}}ReceiverInterface, middlewares ...echo.MiddlewareFunc) echo.HandlerFunc {
-    h := echo.HandlerFunc(func(ctx echo.Context) error {
+    h := echo.HandlerFunc(func(ctx {{$.CtxType}}) error {
 {{- if .RequiresParamObject}}
         var err error
         _ = err
@@ -30,7 +30,7 @@ func {{$opid}}{{$.Prefix}}Handler(si {{$.Prefix}}ReceiverInterface, middlewares 
 {{range $paramIdx, $param := .QueryParams}}
         // ------------- {{if .Required}}Required{{else}}Optional{{end}} query parameter "{{.ParamName}}" -------------
         {{if .IsStyled}}
-        err = runtime.BindQueryParameterWithOptions("{{.Style}}", {{.Explode}}, {{.Required}}, "{{.ParamName}}", ctx.QueryParams(), &params.{{.GoName}}, runtime.BindQueryParameterOptions{Type: "{{.SchemaType}}", Format: "{{.SchemaFormat}}"})
+        err = runtime.BindQueryParameterWithOptions("{{.Style}}", {{.Explode}}, {{.Required}}, "{{.ParamName}}", ctx.QueryParams(), &params.{{.GoName}}, runtime.BindQueryParameterOptions{Type: "{{.SchemaType}}", Format: "{{.SchemaFormat}}"{{unionTypes .SchemaTypes}}})
         if err != nil {
             return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter {{.ParamName}}: %s", err))
         }
@@ -41,7 +41,7 @@ func {{$opid}}{{$.Prefix}}Handler(si {{$.Prefix}}ReceiverInterface, middlewares 
             {{end}}
             {{if .IsJson}}
             var value {{.TypeDef}}
-            err = json.Unmarshal([]byte(paramValue), &value)
+            err = runtime.JSONUnmarshal([]byte(paramValue), &value)
             if err != nil {
                 return echo.NewHTTPError(http.StatusBadRequest, "Error unmarshaling parameter '{{.ParamName}}' as JSON")
             }
@@ -64,14 +64,14 @@ func {{$opid}}{{$.Prefix}}Handler(si {{$.Prefix}}ReceiverInterface, middlewares 
             params.{{.GoName}} = {{if .HasOptionalPointer}}&{{end}}valueList[0]
             {{end}}
             {{if .IsJson}}
-            err = json.Unmarshal([]byte(valueList[0]), &{{.GoName}})
+            err = runtime.JSONUnmarshal([]byte(valueList[0]), &{{.GoName}})
             if err != nil {
                 return echo.NewHTTPError(http.StatusBadRequest, "Error unmarshaling parameter '{{.ParamName}}' as JSON")
             }
             params.{{.GoName}} = {{if .HasOptionalPointer}}&{{end}}{{.GoName}}
             {{end}}
             {{if .IsStyled}}
-            err = runtime.BindStyledParameterWithOptions("{{.Style}}", "{{.ParamName}}", valueList[0], &{{.GoName}}, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: {{.Explode}}, Required: {{.Required}}, Type: "{{.SchemaType}}", Format: "{{.SchemaFormat}}"})
+            err = runtime.BindStyledParameterWithOptions("{{.Style}}", "{{.ParamName}}", valueList[0], &{{.GoName}}, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: {{.Explode}}, Required: {{.Required}}, Type: "{{.SchemaType}}", Format: "{{.SchemaFormat}}"{{unionTypes .SchemaTypes}}})
             if err != nil {
                 return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter {{.ParamName}}: %s", err))
             }
